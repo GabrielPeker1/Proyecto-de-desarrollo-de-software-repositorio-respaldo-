@@ -1,0 +1,73 @@
+<section class="chat-page">
+  <div class="chat-layout">
+    <aside class="chat-sidebar">
+      <h1>Mensajes</h1>
+      <a routerLink="/chats" class="back-to-chats"><i class="bi bi-arrow-left"></i> Todas las conversaciones</a>
+      <div class="selected-chat-card">
+        <img [src]="chat?.solicitud?.foto_animal || 'https://placehold.co/80x80?text=🐾'"
+             [alt]="chat?.solicitud?.animal || 'Mascota'">
+        <div>
+          <strong>{{ persona.nombre_completo || 'Usuario' }}</strong>
+          <span>Conversación activa</span>
+        </div>
+      </div>
+      <a routerLink="/publicaciones" class="back-home"><i class="bi bi-arrow-left"></i> Volver a inicio</a>
+    </aside>
+
+    <main class="chat-conversation">
+      @if (chat) {
+        <header class="chat-heading">
+          <div class="chat-person">
+            <img [src]="chat?.solicitud?.foto_animal || 'https://placehold.co/80x80?text=🐾'"
+                 [alt]="chat?.solicitud?.animal || 'Mascota'">
+            <div>
+              <strong>{{ persona.nombre_completo || 'Usuario' }}</strong>
+              <span>{{ soyAdoptante ? 'Rescatista' : 'Adoptante' }}</span>
+            </div>
+          </div>
+          <a class="pet-chip" [routerLink]="['/publicaciones', chat.solicitud?.id_publicacion]">
+            <img [src]="chat.solicitud?.foto_animal || 'https://placehold.co/64x64?text=🐾'" alt="">
+            <span><strong>{{ chat.solicitud?.animal || 'Mascota' }}</strong><small>Ver publicación</small></span>
+            <i class="bi bi-arrow-up-right"></i>
+          </a>
+        </header>
+
+        <div class="message-list" #messageList aria-live="polite">
+          @if (cargando) {
+            <p class="chat-state">Cargando mensajes...</p>
+          } @else if (errorCarga) {
+            <p class="chat-state error-state">No se pudieron cargar los mensajes. Reintentando...</p>
+          } @else if (mensajes.length === 0) {
+            <div class="chat-state first-message">
+              <i class="bi bi-chat-heart"></i>
+              <p>Esta conversación está lista. Escribí el primer mensaje para coordinar la adopción.</p>
+            </div>
+          } @else {
+            @for (mensaje of mensajes; track mensaje.id_mensaje) {
+              <article class="message-row"
+                       [class.mine]="mensaje.emisor?.id_usuario?.toString() === auth.getUsuarioActual()?.id_usuario?.toString()">
+                <div class="message-bubble">
+                  <p>{{ mensaje.contenido }}</p>
+                  <time>{{ fecha(mensaje.fecha_envio) }}</time>
+                </div>
+              </article>
+            }
+          }
+        </div>
+
+        <form class="message-composer" (ngSubmit)="enviar()">
+          <input name="mensaje" [(ngModel)]="texto" maxlength="2000"
+                 placeholder="Escribí un mensaje..." aria-label="Escribí un mensaje">
+          <button type="submit" [disabled]="!texto.trim() || enviando" aria-label="Enviar mensaje">
+            @if (enviando) { <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> }
+            @else { Enviar }
+          </button>
+        </form>
+      } @else if (cargando) {
+        <p class="chat-state">Cargando conversación...</p>
+      } @else {
+        <p class="chat-state error-state">No se encontró esta conversación o no está disponible.</p>
+      }
+    </main>
+  </div>
+</section>

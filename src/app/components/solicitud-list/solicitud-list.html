@@ -1,0 +1,121 @@
+<section class="requests-page">
+  <header class="requests-heading">
+    <div>
+      <h1>{{ tituloLista }}</h1>
+      <p>{{ esRescatista ? 'Gestioná las solicitudes recibidas' : 'Seguí el estado de tus solicitudes de adopción' }}</p>
+    </div>
+    <span class="request-count">{{ solicitudes.length }} {{ esRescatista ? 'recibidas' : 'enviadas' }}</span>
+  </header>
+
+  <div class="request-toolbar">
+    <span class="request-mode">{{ esRescatista ? 'Recibidas' : 'Enviadas' }} ({{ solicitudes.length }})</span>
+    <label class="status-filter">
+      <span>Estado</span>
+      <select [(ngModel)]="estadoFiltro" aria-label="Filtrar por estado">
+        <option value="TODAS">Todas</option>
+        <option value="PENDIENTE">Pendientes</option>
+        <option value="ACEPTADA">Aceptadas</option>
+        <option value="RECHAZADA">Rechazadas</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="requests-notice">
+    <i class="bi bi-chat-left-text"></i>
+    @if (esRescatista) {
+      Al aceptar una solicitud, se abrirá un chat privado con el adoptante para coordinar los detalles.
+    } @else {
+      Cuando el rescatista acepte tu solicitud, vas a poder coordinar los detalles por un chat privado.
+    }
+  </div>
+
+  @if (cargando) {
+    <p class="requests-state">Cargando solicitudes...</p>
+  } @else if (errorCarga) {
+    <p class="requests-state error-state">No se pudieron cargar las solicitudes. Revisá que el servidor esté activo e intentá de nuevo.</p>
+    <button type="button" class="retry-button" (click)="cargando = true; errorCarga = false; cargarSolicitudes()">Reintentar</button>
+  } @else if (solicitudesVisibles.length === 0) {
+    <div class="requests-empty">
+      <i class="bi bi-file-earmark-heart"></i>
+      <h2>No hay solicitudes para mostrar</h2>
+      <p>{{ solicitudes.length === 0 ? 'Cuando haya actividad de adopción, la vas a encontrar acá.' : 'Probá con otro filtro de estado.' }}</p>
+    </div>
+  } @else {
+    <div class="requests-list">
+      @for (solicitud of solicitudesVisibles; track solicitud.id_solicitud) {
+        <article class="request-card">
+          <img class="pet-photo" [src]="fotoMascota(solicitud)" [alt]="'Foto de ' + nombreMascota(solicitud)">
+          <div class="request-content">
+            <div class="request-title-row">
+              <h2>{{ nombreMascota(solicitud) }}<span *ngIf="solicitud.publicacion?.animal?.especie"> · {{ solicitud.publicacion.animal.especie }}</span></h2>
+              <span class="status-badge" [class.pending]="solicitud.estado === 'PENDIENTE'"
+                    [class.accepted]="solicitud.estado === 'ACEPTADA'"
+                    [class.rejected]="solicitud.estado === 'RECHAZADA'">
+                {{ solicitud.estado === 'PENDIENTE' ? 'Pendiente' : solicitud.estado === 'ACEPTADA' ? 'Aceptada' : 'Rechazada' }}
+              </span>
+            </div>
+            <p class="request-location"><i class="bi bi-geo-alt-fill"></i> {{ ubicacion(solicitud) }}</p>
+
+            @if (esRescatista) {
+              <div class="applicant-info">
+                <span class="eyebrow">SOLICITANTE</span>
+                @if (solicitud.adoptante?.id_usuario) {
+                  <a class="perfil-link" [routerLink]="['/usuarios', solicitud.adoptante.id_usuario]"
+                     title="Ver perfil del adoptante">{{ solicitud.adoptante.nombre_completo || 'Adoptante' }}</a>
+                } @else {
+                  <strong>Adoptante</strong>
+                }
+                <span>{{ solicitud.adoptante?.email || '' }} <span *ngIf="solicitud.adoptante?.telefono">· {{ solicitud.adoptante.telefono }}</span></span>
+              </div>
+            } @else {
+              <div class="applicant-info">
+                <span class="eyebrow">RESCATISTA</span>
+                <strong>{{ solicitud.publicacion?.rescatista?.nombre_completo || 'Rescatista' }}</strong>
+              </div>
+            }
+
+            @if (solicitud.publicacion?.descripcion) {
+              <p class="animal-description">“{{ solicitud.publicacion.descripcion }}”</p>
+            }
+            <p class="request-date">Solicitud enviada el {{ solicitud.fecha_solicitud | date:'d MMM y' }}</p>
+            @if (solicitud.motivo_rechazo) {
+              <p class="rejection-reason">Motivo: {{ solicitud.motivo_rechazo }}</p>
+            }
+
+            <div class="request-actions">
+              @if (esRescatista && solicitud.estado === 'PENDIENTE') {
+                <button type="button" class="accept-button" [disabled]="procesandoId === solicitud.id_solicitud"
+                        (click)="aceptar(solicitud)">Aceptar solicitud</button>
+                <button type="button" class="reject-button" [disabled]="procesandoId === solicitud.id_solicitud"
+                        (click)="abrirRechazo(solicitud)">Rechazar</button>
+              }
+              @if (solicitud.estado === 'ACEPTADA' && solicitud.id_chat) {
+                <button type="button" class="chat-button" (click)="abrirChat(solicitud)">
+                  <i class="bi bi-chat-dots"></i> Abrir chat
+                </button>
+              }
+            </div>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>
+
+@if (solicitudRechazo) {
+  <div class="modal-backdrop" (click)="solicitudRechazo = null">
+    <section class="reject-dialog" role="dialog" aria-modal="true" aria-labelledby="reject-title"
+             (click)="$event.stopPropagation()">
+      <h2 id="reject-title">Rechazar solicitud</h2>
+      <p>Contale al solicitante por qué no podés avanzar con la adopción.</p>
+      <label for="reject-reason">Motivo</label>
+      <textarea id="reject-reason" [(ngModel)]="motivoRechazo" rows="3" maxlength="500"
+                placeholder="Escribí el motivo..."></textarea>
+      <div class="dialog-actions">
+        <button type="button" class="cancel-button" (click)="solicitudRechazo = null">Cancelar</button>
+        <button type="button" class="reject-button" [disabled]="!motivoRechazo.trim() || procesandoId !== null"
+                (click)="rechazar()">Confirmar rechazo</button>
+      </div>
+    </section>
+  </div>
+}

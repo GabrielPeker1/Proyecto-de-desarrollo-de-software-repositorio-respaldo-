@@ -1,0 +1,84 @@
+<div class="page-header">
+  <h2>{{ esRescatista ? 'Mis mascotas publicadas' : 'Mascotas en adopción' }}</h2>
+  <span class="count">Mostrando {{ publicaciones?.length ?? 0 }} resultados</span>
+</div>
+
+@if (!esRescatista) {
+  <div class="filters">
+    <label class="filter">
+      <span>Provincia</span>
+      <select name="provincia" [(ngModel)]="provincia" (ngModelChange)="cambiarProvincia()">
+        <option value="">Todas las provincias</option>
+        @for (provinciaOption of provincias; track provinciaOption) {
+          <option [value]="provinciaOption">{{ provinciaOption }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="filter">
+      <span>Departamento</span>
+      <select name="departamento" [(ngModel)]="departamento" (ngModelChange)="cambiarDepartamento()"
+              [disabled]="!provincia || departamentos.length === 0">
+        <option value="">
+          {{ !provincia ? 'Elegí una provincia' : departamentos.length === 0 ? 'Sin publicaciones en la provincia' : 'Todos los departamentos' }}
+        </option>
+        @for (departamentoOption of departamentos; track departamentoOption) {
+          <option [value]="departamentoOption">{{ departamentoOption }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="filter">
+      <span>Localidad</span>
+      <select name="localidad" [(ngModel)]="localidad" (ngModelChange)="cargarPublicaciones()"
+              [disabled]="!departamento || localidades.length === 0">
+        <option value="">
+          {{ !departamento ? 'Elegí un departamento' : 'Todas las localidades' }}
+        </option>
+        @for (localidadOption of localidades; track localidadOption) {
+          <option [value]="localidadOption">{{ localidadOption }}</option>
+        }
+      </select>
+    </label>
+
+    @if (hayFiltros) {
+      <button class="clear-filters" type="button" (click)="limpiarFiltros()">
+        <i class="bi bi-x-circle"></i> Limpiar filtros
+      </button>
+    }
+  </div>
+}
+
+<div class="pets-grid">
+  @for (pub of publicaciones; track pub.id_publicacion) {
+    <article class="pet-card">
+      <a class="pet-card-link" [routerLink]="['/publicaciones', pub.id_publicacion]">
+        <img [src]="pub.animal?.fotos?.[0]?.url_foto || 'https://placehold.co/400x300?text=Sin+foto'"
+             [alt]="pub.animal?.nombre || 'Mascota'">
+        <div class="pet-card-body">
+          <h4>{{ pub.animal?.nombre || 'Sin nombre' }}</h4>
+          <div class="location">
+            <i class="bi bi-geo-alt-fill"></i>
+            {{ getUbicacionPublicacion(pub) }}
+          </div>
+        </div>
+      </a>
+      @if (esRescatista) {
+        <button class="delete-publication" type="button"
+                [disabled]="eliminandoPublicaciones.has(pub.id_publicacion)"
+                (click)="eliminarPublicacion(pub)">
+          @if (eliminandoPublicaciones.has(pub.id_publicacion)) { Eliminando... }
+          @else { <i class="bi bi-trash"></i> Eliminar publicación }
+        </button>
+      }
+    </article>
+  }
+</div>
+
+@if ((publicaciones?.length ?? 0) === 0) {
+  <div class="text-center py-5 text-muted">
+    @if (esRescatista) { No tenés mascotas publicadas todavía. }
+    @else if (hayFiltros) { No hay mascotas en adopción en esa ubicación. }
+    @else { No hay mascotas en adopción por el momento. }
+  </div>
+}

@@ -1,0 +1,50 @@
+<section class="messages-page">
+  <aside class="conversation-panel">
+    <header class="conversation-heading">
+      <h1>Mensajes</h1>
+      <p>Tus conversaciones sobre adopciones</p>
+      <label class="conversation-search">
+        <i class="bi bi-search"></i>
+        <input [(ngModel)]="busqueda" placeholder="Buscar conversación..." aria-label="Buscar conversación">
+      </label>
+    </header>
+
+    @if (cargando) {
+      <div class="conversation-state">Cargando conversaciones...</div>
+    } @else if (errorCarga) {
+      <div class="conversation-state error-state">No se pudieron cargar los chats. Probá de nuevo más tarde.</div>
+    } @else if (conversacionesFiltradas.length === 0) {
+      <div class="conversation-state">
+        {{ busqueda ? 'No hay conversaciones que coincidan.' : 'Todavía no tenés conversaciones.' }}
+      </div>
+    } @else {
+      <nav class="conversation-list" aria-label="Conversaciones">
+        @for (chat of conversacionesFiltradas; track chat.id_chat) {
+          <a class="conversation-item" [routerLink]="['/chats', chat.id_chat]">
+            <img class="person-avatar"
+                 [src]="chat.solicitud?.foto_animal || 'https://placehold.co/80x80?text=🐾'"
+                 [alt]="'Foto de ' + (chat.solicitud?.animal || 'mascota')">
+            <span class="conversation-copy">
+              <span class="conversation-topline">
+                <strong>{{ personaDelChat(chat).nombre_completo || 'Usuario' }}</strong>
+                <time>{{ fechaCorta(chat.ultimo_mensaje?.fecha_envio || chat.fecha_creacion) }}</time>
+              </span>
+              <span class="conversation-preview">
+                {{ chat.ultimo_mensaje?.contenido || 'Iniciá la conversación' }}
+              </span>
+              <span class="pet-reference"><i class="bi bi-paw-fill"></i> {{ chat.solicitud?.animal || 'Adopción' }}</span>
+            </span>
+          </a>
+        }
+      </nav>
+    }
+
+    <a routerLink="/publicaciones" class="back-home"><i class="bi bi-arrow-left"></i> Volver a inicio</a>
+  </aside>
+
+  <main class="conversation-empty">
+    <div class="empty-message-icon"><i class="bi bi-chat-dots"></i></div>
+    <h2>Elegí una conversación</h2>
+    <p>Seleccioná un chat para coordinar los detalles de la adopción.</p>
+  </main>
+</section>

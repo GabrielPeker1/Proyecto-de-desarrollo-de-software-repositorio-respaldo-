@@ -1,0 +1,36 @@
+:host { display: block; }
+.auth-page { display: grid; min-height: calc(100vh - 136px); place-items: start center; padding: 28px 16px; }
+.auth-card { display: grid; width: min(100%, 430px); gap: 17px; padding: 34px; border: 1px solid var(--border); border-radius: 14px; background: #fff; box-shadow: 0 12px 35px rgba(35, 32, 28, .06); }
+.register-card { width: min(100%, 520px); }
+.auth-brand { margin-bottom: 8px; color: var(--text-dark); font-size: 19px; font-weight: 700; text-decoration: none; }
+.auth-eyebrow { margin: 0 0 -13px; color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.auth-card h1 { margin: 0; font-size: 27px; font-weight: 700; }
+.auth-description { margin: -10px 0 4px; color: var(--text-gray); font-size: 14px; }
+.auth-field { display: grid; gap: 7px; }
+.auth-field span { font-size: 13px; font-weight: 600; }
+.auth-field span small { color: #89837d; font-size: 11px; font-weight: 400; }
+.registration-photo { display: grid; gap: 8px; }
+.registration-photo > span { font-size: 13px; font-weight: 600; }
+.registration-photo > span small, .registration-photo > small { color: #89837d; font-size: 11px; font-weight: 400; }
+.registration-photo-picker { display: flex; align-items: center; gap: 12px; }
+.registration-photo-preview, .registration-photo-placeholder { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 50%; object-fit: cover; background: #f0eeeb; color: #858079; font-size: 48px; }
+.registration-photo-button { position: relative; padding: 9px 13px; border: 1px solid var(--green-dark); border-radius: 7px; color: var(--green-dark); font-size: 12px; font-weight: 600; cursor: pointer; }
+.registration-photo-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.auth-field input, .auth-field select { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #e3dfda; border-radius: 7px; background: white; font: inherit; font-size: 14px; }
+.auth-field input:focus, .auth-field select:focus { border-color: var(--green-dark); outline: 3px solid rgba(45,90,74,.12); }
+.auth-error { padding: 10px 12px; border-radius: 7px; background: #fff0f0; color: #a33b3b; font-size: 13px; }
+.auth-submit { min-height: 46px; margin-top: 4px; border: 0; border-radius: 7px; background: var(--green-dark); color: #fff; font-size: 14px; font-weight: 700; }
+.auth-submit:disabled { cursor: not-allowed; opacity: .55; }
+.auth-switch { margin: 0; color: var(--text-gray); font-size: 13px; text-align: center; }
+.auth-switch a { color: var(--green-dark); font-weight: 700; }
+.register-location { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.register-location select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+.form-loading, .password-mismatch { margin: 0; color: var(--text-gray); font-size: 12px; }
+.password-mismatch { color: #a33b3b; }
+@media (max-width: 480px) { .auth-card { padding: 25px 20px; } }
+.auth-field textarea { width: 100%; padding: 9px 12px; border: 1px solid #e3dfda; border-radius: 7px; background: white; font: inherit; font-size: 14px; resize: vertical; }
+.auth-field textarea:focus { border-color: var(--green-dark); outline: 3px solid rgba(45,90,74,.12); }
+.char-count { justify-self: end; color: #89837d; font-size: 11px; }
+/* Calle (ancha) + Número + Piso en una fila */
+.register-address { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 480px) { .register-address { grid-template-columns: 1fr 1fr; } .address-street { grid-column: 1 / -1; } }

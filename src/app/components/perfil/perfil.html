@@ -1,0 +1,179 @@
+<section class="profile-page">
+  <header class="profile-heading">
+    <h1>Mi Perfil</h1>
+    <p>Gestioná tu información personal y privacidad</p>
+  </header>
+
+  @if (cargando) {
+    <p class="profile-state">Cargando tu perfil...</p>
+  } @else if (errorCarga) {
+    <p class="profile-state error-state">Iniciá sesión para ver y editar tu perfil.</p>
+  } @else {
+    <div class="profile-layout">
+      <form class="profile-data" #profileForm="ngForm" (ngSubmit)="guardar()">
+        <h2>Datos de usuario</h2>
+        <div class="profile-avatar-row">
+          @if (fotoPerfil) {
+            <img class="profile-avatar" [src]="fotoPerfil" alt="Foto de perfil">
+          } @else {
+            <i class="bi bi-person-circle profile-avatar-placeholder" role="img" aria-label="Sin foto de perfil"></i>
+          }
+          <div>
+            <strong>{{ nombre || 'Tu nombre' }}</strong>
+            <label class="photo-picker">
+              Cambiar foto de perfil
+              <input type="file" accept="image/*" (change)="seleccionarFoto($event)">
+            </label>
+          </div>
+        </div>
+
+        <div class="profile-fields">
+          <label class="profile-field">
+            <span>Nombre Completo</span>
+            <input name="nombre" [(ngModel)]="nombre" required maxlength="150">
+          </label>
+          <label class="profile-field">
+            <span>Correo Electrónico</span>
+            <input name="email" [(ngModel)]="email" required type="email" maxlength="200">
+          </label>
+          <label class="profile-field">
+            <span>Teléfono</span>
+            <input name="telefono" [(ngModel)]="telefono" maxlength="20" placeholder="Agregar teléfono">
+          </label>
+          <label class="profile-field">
+            <span>Provincia</span>
+            <select name="provincia" [(ngModel)]="ubicacion.provincia" (ngModelChange)="ubicacion.elegirProvincia()" required>
+              <option value="" disabled>Seleccioná una provincia</option>
+              @for (provinciaOption of provincias; track provinciaOption) {
+                <option [value]="provinciaOption">{{ provinciaOption }}</option>
+              }
+            </select>
+          </label>
+          <label class="profile-field">
+            <span>Departamento</span>
+            <select name="departamento" [(ngModel)]="ubicacion.departamento" (ngModelChange)="ubicacion.elegirDepartamento()"
+                    required [disabled]="!ubicacion.provincia || ubicacion.cargandoDepartamentos">
+              <option value="" disabled>
+                {{ !ubicacion.provincia ? 'Elegí una provincia' : ubicacion.cargandoDepartamentos ? 'Cargando...' : 'Seleccioná un departamento' }}
+              </option>
+              @for (departamentoOption of ubicacion.departamentos; track departamentoOption) {
+                <option [value]="departamentoOption">{{ departamentoOption }}</option>
+              }
+            </select>
+          </label>
+          <label class="profile-field">
+            <span>Localidad</span>
+            <select name="ciudad" [(ngModel)]="ubicacion.ciudad" required
+                    [disabled]="!ubicacion.departamento || ubicacion.cargandoLocalidades">
+              <option value="" disabled>
+                {{ !ubicacion.departamento ? 'Elegí un departamento' : ubicacion.cargandoLocalidades ? 'Cargando...' : 'Seleccioná una localidad' }}
+              </option>
+              @for (localidadOption of ubicacion.localidades; track localidadOption) {
+                <option [value]="localidadOption">{{ localidadOption }}</option>
+              }
+            </select>
+          </label>
+          <div class="profile-field-wide profile-address">
+            <label class="profile-field">
+              <span>Calle</span>
+              <input name="calle" [(ngModel)]="calle" required pattern=".*\S.*" maxlength="150" placeholder="Ej: Av. Pellegrini">
+            </label>
+            <label class="profile-field">
+              <span>Número</span>
+              <input name="numero" [(ngModel)]="numero" required pattern="\d{1,6}" maxlength="6" inputmode="numeric" placeholder="Ej: 1250">
+            </label>
+            <label class="profile-field">
+              <span>Piso <small>(opcional)</small></span>
+              <input name="piso" [(ngModel)]="piso" maxlength="10" placeholder="Ej: 3">
+            </label>
+            <small class="address-privacy">
+              <i class="bi" [class.bi-lock-fill]="ocultarDireccion" [class.bi-globe]="!ocultarDireccion"></i>
+              {{ ocultarDireccion ? 'Privada: nadie más ve tu calle, número ni piso.' : 'Pública: se ve en tu perfil público.' }}
+              Lo cambiás en Privacidad.
+            </small>
+          </div>
+          <label class="profile-field profile-field-wide">
+            <span>Sobre vos <small>(opcional)</small></span>
+            <textarea name="descripcion" [(ngModel)]="descripcion" maxlength="500" rows="4"
+                      placeholder="Contá un poco sobre vos: tu experiencia con animales, tu hogar, por qué querés adoptar o rescatar..."></textarea>
+            <small class="char-count">{{ descripcion.length }}/500</small>
+          </label>
+        </div>
+        @if (ubicacion.error) {
+          <p class="text-danger small">{{ ubicacion.error }}</p>
+        }
+        @if (numero && !numeroValido) {
+          <p class="text-danger small">El número debe tener solo dígitos.</p>
+        }
+        <button class="save-button" type="submit" [disabled]="profileForm.invalid || !ubicacion.completa || guardando">
+          @if (guardando) {
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            Guardando...
+          } @else {
+            Guardar cambios
+          }
+        </button>
+      </form>
+
+      <aside class="profile-settings">
+        <section class="settings-block">
+          <h2>Privacidad</h2>
+          <div class="privacy-note">
+            <i class="bi bi-shield-fill"></i>
+            <div>
+              <strong>Tu información está protegida</strong>
+              <p>Tu teléfono, email y dirección exacta (calle, número y piso) están ocultos por defecto. Los demás usuarios solo ven tu nombre y tu provincia, departamento y localidad. Si querés, podés hacer pública tu dirección.</p>
+            </div>
+          </div>
+          <label class="privacy-row">
+            <span>Ocultar teléfono</span>
+            <input type="checkbox" [ngModel]="ocultarTelefono" [ngModelOptions]="{standalone: true}"
+                   (ngModelChange)="cambiarPrivacidadTelefono($event)" name="ocultarTelefono">
+            <span class="toggle" aria-hidden="true"></span>
+          </label>
+          <label class="privacy-row">
+            <span>Ocultar dirección exacta</span>
+            <input type="checkbox" [ngModel]="ocultarDireccion" [ngModelOptions]="{standalone: true}"
+                   [disabled]="guardandoPrivacidad"
+                   (ngModelChange)="cambiarPrivacidadDireccion($event)" name="ocultarDireccion">
+            <span class="toggle" aria-hidden="true"></span>
+          </label>
+        </section>
+
+        <section class="settings-block security-block">
+          <h2>Seguridad</h2>
+          <p>Actualizá tu contraseña para mantener tu cuenta segura.</p>
+          <button type="button" class="password-button" (click)="mostrarCambioPassword = !mostrarCambioPassword">
+            Cambiar contraseña
+          </button>
+          @if (mostrarCambioPassword) {
+            <form class="password-form" #passwordForm="ngForm" (ngSubmit)="cambiarPassword()">
+              <label class="profile-field">
+                <span>Contraseña actual</span>
+                <input type="password" name="passwordActual" [(ngModel)]="passwordActual" required
+                       autocomplete="current-password">
+              </label>
+              <label class="profile-field">
+                <span>Nueva contraseña</span>
+                <input type="password" name="passwordNuevo" [(ngModel)]="passwordNuevo" required minlength="6"
+                       autocomplete="new-password">
+              </label>
+              <label class="profile-field">
+                <span>Confirmar nueva contraseña</span>
+                <input type="password" name="confirmarPasswordNuevo" [(ngModel)]="confirmarPasswordNuevo"
+                       required minlength="6" autocomplete="new-password">
+              </label>
+              @if (confirmarPasswordNuevo && passwordNuevo !== confirmarPasswordNuevo) {
+                <small class="password-error">Las contraseñas nuevas no coinciden.</small>
+              }
+              <button class="save-button password-save" type="submit"
+                      [disabled]="passwordForm.invalid || passwordNuevo !== confirmarPasswordNuevo || cambiandoPassword">
+                @if (cambiandoPassword) { Actualizando... } @else { Actualizar contraseña }
+              </button>
+            </form>
+          }
+        </section>
+      </aside>
+    </div>
+  }
+</section>

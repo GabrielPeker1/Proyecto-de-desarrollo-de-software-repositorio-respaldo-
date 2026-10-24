@@ -1,0 +1,177 @@
+<section class="publication-page">
+  <a href="/publicaciones" class="back-link" (click)="solicitarDescartar($event)">
+    <i class="bi bi-arrow-left"></i>
+    Volver a inicio
+  </a>
+
+  <header class="form-heading">
+    <h1>Registrar nuevo animal</h1>
+    <p>Completá la información del animal rescatado para publicarlo en la plataforma.</p>
+  </header>
+
+  @if (!usuarioAutenticado) {
+    <section class="login-required-card">
+      <div class="login-required-icon"><i class="bi bi-person-lock"></i></div>
+      <h2>Iniciá sesión para publicar</h2>
+      <p>La publicación tiene que quedar asociada a tu cuenta de rescatista.</p>
+      <div class="login-required-actions">
+        <a routerLink="/login" [queryParams]="{ returnUrl: '/publicar' }">Iniciar sesión</a>
+        <a routerLink="/registro">Crear cuenta</a>
+      </div>
+    </section>
+  } @else {
+  <form class="publication-form" #publicationForm="ngForm" (ngSubmit)="publicar()">
+    <section class="photo-card">
+      <label class="section-label">Agregar fotos</label>
+      <p class="section-hint">Seleccioná al menos una foto de tu dispositivo. Todos los campos son obligatorios, excepto las casillas.</p>
+
+      <div class="photo-list">
+        @for (foto of fotosSeleccionadas; track foto.vistaPrevia; let i = $index) {
+          <div class="selected-photo">
+            <img class="photo-preview" [src]="foto.vistaPrevia" [alt]="'Vista previa de foto ' + (i + 1)">
+            <button type="button" class="remove-photo" (click)="quitarFoto(i)" [attr.aria-label]="'Quitar foto ' + (i + 1)">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+        }
+      </div>
+
+      @if (fotosSeleccionadas.length < 5) {
+        <label class="add-photo">
+          <i class="bi bi-upload"></i>
+          Seleccionar fotos
+          <input type="file" accept="image/*" multiple
+                 (change)="seleccionarFotos($event)"
+                 [attr.aria-label]="'Seleccionar fotos del animal'">
+        </label>
+      }
+      <p class="help-text">Podés subir hasta 5 imágenes desde tu dispositivo. Máximo 5 MB por imagen.</p>
+    </section>
+
+    <section class="details-card">
+      <div class="field">
+        <label for="animal-name">Nombre del animal</label>
+        <input id="animal-name" name="nombre" [(ngModel)]="nombre" required pattern=".*\S.*" maxlength="100"
+               placeholder="Ej: Luna, Firulais, Canela...">
+        <small>Si no tiene nombre conocido, asignale uno temporal.</small>
+      </div>
+
+      <div class="field">
+        <label for="animal-species">Especie</label>
+        <select id="animal-species" name="especie" [(ngModel)]="especie" required>
+          <option value="" disabled>Seleccioná una especie</option>
+          <option value="Perro">Perro</option>
+          <option value="Gato">Gato</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+
+      @if (especie === 'Otro') {
+        <div class="field">
+          <label for="animal-other-species">¿Qué especie es?</label>
+          <input id="animal-other-species" name="especieOtra" [(ngModel)]="especieOtra" required
+                 pattern=".*\S.*" maxlength="50" placeholder="Ej: Conejo, Hámster, Tortuga...">
+        </div>
+      }
+
+      <div class="field-row">
+        <div class="field">
+          <label for="animal-age">Edad estimada</label>
+          <input id="animal-age" name="edad" [(ngModel)]="edad" type="number" required min="0"
+                 step="1" placeholder="Ej: 2">
+          <small>Ingresá la edad en años, solo números.</small>
+        </div>
+        <div class="field">
+          <label for="animal-sex">Sexo</label>
+          <select id="animal-sex" name="sexo" [(ngModel)]="sexo" required>
+            <option value="" disabled>Seleccioná una opción</option>
+            <option value="Hembra">Hembra</option>
+            <option value="Macho">Macho</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="animal-breed">Raza</label>
+          <input id="animal-breed" name="raza" [(ngModel)]="raza" required pattern=".*\S.*" maxlength="100"
+                 placeholder="Ej: Mestizo, Golden Retriever">
+        </div>
+        <div class="field">
+          <label for="animal-weight">Peso (kg)</label>
+          <input id="animal-weight" name="peso" [(ngModel)]="peso" type="number" required min="0" max="9999"
+                 step="0.01" placeholder="Ej: 12.5">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="animal-vaccines">Vacunas administradas</label>
+        <input id="animal-vaccines" name="vacunas" [(ngModel)]="vacunas" required pattern=".*\S.*" maxlength="255"
+               placeholder="Ej: Antirrábica o No se conocen">
+        <small>Separá con comas si son varias. Si no se conocen, escribí “No se conocen”.</small>
+      </div>
+
+      <div class="field">
+        <label for="animal-description">Descripción</label>
+        <textarea id="animal-description" name="descripcion" [(ngModel)]="descripcion" required pattern=".*\S.*" rows="3"
+                  placeholder="Contá brevemente la historia del animal, su temperamento y necesidades especiales..."></textarea>
+      </div>
+
+      <label class="neutered-option">
+        <input type="checkbox" name="castrado" [(ngModel)]="castrado">
+        <span class="toggle"></span>
+        <strong>Castrado/a</strong>
+        <small>Marcá si el animal ya fue esterilizado.</small>
+      </label>
+
+      <fieldset class="animal-traits">
+        <legend>Características y cuidados</legend>
+        <label>
+          <input type="checkbox" name="compatibleNinos" [(ngModel)]="compatibleNinos">
+          <span>Compatible con niños</span>
+        </label>
+        <label>
+          <input type="checkbox" name="compatibleOtrosAnimales" [(ngModel)]="compatibleOtrosAnimales">
+          <span>Compatible con otros animales</span>
+        </label>
+        <label>
+          <input type="checkbox" name="desparasitado" [(ngModel)]="desparasitado">
+          <span>Desparasitado</span>
+        </label>
+        <label>
+          <input type="checkbox" name="tieneMicrochip" [(ngModel)]="tieneMicrochip">
+          <span>Tiene microchip</span>
+        </label>
+        <label>
+          <input type="checkbox" name="entrenamientoBasico" [(ngModel)]="entrenamientoBasico">
+          <span>Entrenamiento básico de obediencia</span>
+        </label>
+      </fieldset>
+
+      <button class="submit-button" type="submit"
+              [disabled]="publicationForm.invalid || fotosSeleccionadas.length === 0 || publicando">
+        @if (publicando) {
+          <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+          Publicando...
+        } @else {
+          Publicar animal
+        }
+      </button>
+    </section>
+  </form>
+  }
+</section>
+
+@if (confirmarDescartar) {
+  <div class="confirm-backdrop" role="presentation" (click)="confirmarDescartar = false">
+    <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="discard-title"
+             (click)="$event.stopPropagation()">
+      <h2 id="discard-title">¿Descartar publicación?</h2>
+      <p>Si salís ahora, los datos que completaste se perderán.</p>
+      <div class="confirm-actions">
+        <button type="button" class="cancel-button" (click)="confirmarDescartar = false">Seguir editando</button>
+        <button type="button" class="discard-button" (click)="confirmarSalida()">Descartar</button>
+      </div>
+    </section>
+  </div>
+}

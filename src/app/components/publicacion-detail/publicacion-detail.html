@@ -1,0 +1,140 @@
+<a routerLink="/publicaciones" class="back-link">
+  <i class="bi bi-arrow-left"></i> Volver a inicio
+</a>
+
+@if (publicacion) {
+  <div class="detail-layout">
+    <div class="detail-images">
+      <img [src]="imagenPrincipal" class="main-img" [alt]="publicacion.animal.nombre"
+           [class.zoomable]="fotos.length > 0" (click)="abrirVisor()"
+           [attr.title]="fotos.length > 0 ? 'Ver en tamaño completo' : null">
+      <div class="thumbs">
+        @for (foto of publicacion.animal.fotos; track foto.id_foto) {
+          <img [src]="foto.url_foto"
+               (click)="imagenPrincipal = foto.url_foto"
+               [class.active]="imagenPrincipal === foto.url_foto">
+        }
+      </div>
+    </div>
+
+    @if (visorAbierto) {
+      <div class="visor" (click)="cerrarVisor()" role="dialog" aria-modal="true"
+           [attr.aria-label]="'Fotos de ' + publicacion.animal.nombre">
+        <button type="button" class="visor-cerrar" (click)="cerrarVisor()" aria-label="Cerrar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        @if (fotos.length > 1) {
+          <button type="button" class="visor-flecha visor-anterior"
+                  (click)="cambiarFoto(-1); $event.stopPropagation()" aria-label="Foto anterior">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+        }
+        <!-- stopPropagation: el clic sobre la foto no cierra el visor, solo el clic afuera. -->
+        <img [src]="imagenPrincipal" [alt]="publicacion.animal.nombre" (click)="$event.stopPropagation()">
+        @if (fotos.length > 1) {
+          <button type="button" class="visor-flecha visor-siguiente"
+                  (click)="cambiarFoto(1); $event.stopPropagation()" aria-label="Foto siguiente">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+          <span class="visor-contador">{{ indiceFoto + 1 }} / {{ fotos.length }}</span>
+        }
+      </div>
+    }
+
+    <div class="detail-info">
+      <h1>{{ publicacion.animal.nombre }}</h1>
+      <p class="description">{{ publicacion.descripcion }}</p>
+
+      <div class="ficha-tecnica">
+        <h3>Ficha técnica</h3>
+        <div class="ficha-grid">
+          <div class="ficha-item">
+            <i class="bi bi-calendar3"></i>
+            <div><span>Edad</span><strong>{{ publicacion.animal.edad }}</strong></div>
+          </div>
+          <div class="ficha-item">
+            <i class="bi bi-bag-check"></i>
+            <div><span>Peso</span><strong>{{ publicacion.animal.peso || '—' }} kg</strong></div>
+          </div>
+          <div class="ficha-item">
+            <i class="bi bi-shield-check"></i>
+            <div><span>Vacunas</span><strong>{{ publicacion.animal.vacunas_administradas || 'Desconocido' }}</strong></div>
+          </div>
+          <div class="ficha-item">
+            <i class="bi bi-gender-ambiguous"></i>
+            <div><span>Castración</span><strong>{{ publicacion.animal.castrado ? 'Castrado' : 'Sin castrar' }}</strong></div>
+          </div>
+          <div class="ficha-item">
+            <i class="bi bi-tag"></i>
+            <div><span>Raza</span><strong>{{ publicacion.animal.raza || 'Mestizo' }}</strong></div>
+          </div>
+          <div class="ficha-item">
+            <i class="bi bi-gender-male"></i>
+            <div><span>Sexo</span><strong>{{ publicacion.animal.sexo || 'Macho' }}</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="features">
+        @if (publicacion.animal.compatible_ninos) {
+          <li><i class="bi bi-check-circle"></i> Compatible con niños</li>
+        }
+        @if (publicacion.animal.compatible_otros_animales) {
+          <li><i class="bi bi-check-circle"></i> Compatible con otros animales</li>
+        }
+        @if (publicacion.animal.desparasitado) {
+          <li><i class="bi bi-check-circle"></i> Desparasitado</li>
+        }
+        @if (publicacion.animal.tiene_microchip) {
+          <li><i class="bi bi-check-circle"></i> Tiene microchip</li>
+        }
+        @if (publicacion.animal.entrenamiento_basico) {
+          <li><i class="bi bi-check-circle"></i> Entrenamiento básico de obediencia</li>
+        }
+      </ul>
+
+      @if (esAdoptante) {
+        @if (cargandoSolicitud) {
+          <button class="btn-orange" type="button" disabled>Comprobando solicitud...</button>
+        } @else if (solicitudExistente && estadoSolicitud === 'PENDIENTE') {
+          <button class="btn-orange btn-enviada" type="button" disabled>
+            <i class="bi bi-check-circle-fill"></i> Solicitud enviada
+          </button>
+        } @else if (solicitudExistente && estadoSolicitud === 'RECHAZADA') {
+          <button class="btn-orange btn-rechazada" type="button" disabled>
+            <i class="bi bi-x-circle-fill"></i> Solicitud rechazada
+          </button>
+        } @else if (solicitudExistente) {
+          <button class="btn-orange" type="button" disabled>
+            Ya tenés una solicitud {{ estadoSolicitud === 'PENDIENTE' ? 'pendiente' : estadoSolicitud.toLocaleLowerCase() }}
+          </button>
+        } @else {
+          <button class="btn-orange" type="button" [disabled]="enviandoSolicitud" (click)="solicitarAdopcion()">
+            @if (enviandoSolicitud) { Enviando solicitud... } @else { Solicitar adopción }
+          </button>
+        }
+      } @else if (sinSesion) {
+        <a class="btn-orange" [routerLink]="['/login']" [queryParams]="{ returnUrl: returnUrl }">
+          Iniciá sesión para solicitar la adopción
+        </a>
+      }
+      @if (esRescatistaPropietario) {
+        <button class="delete-publication-button" type="button" [disabled]="eliminandoPublicacion"
+                (click)="eliminarPublicacion()">
+          @if (eliminandoPublicacion) {
+            Eliminando publicación...
+          } @else {
+            <i class="bi bi-trash"></i> Eliminar publicación
+          }
+        </button>
+      }
+
+      <p class="refugio">
+        <i class="bi bi-geo-alt-fill"></i>
+        <a class="perfil-link" [routerLink]="['/usuarios', publicacion.rescatista.id_usuario]"
+           title="Ver perfil del rescatista">{{ publicacion.rescatista.nombre_completo }}</a>
+        · {{ publicacion.localidad || 'Sin localidad' }}@if (publicacion.provincia) {, {{ publicacion.provincia }}}
+      </p>
+    </div>
+  </div>
+}

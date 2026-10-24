@@ -1,0 +1,136 @@
+<section class="auth-page">
+  <form class="auth-card register-card" #registerForm="ngForm" (ngSubmit)="registrar()">
+    <a routerLink="/publicaciones" class="auth-brand">🐾 AdoptMe</a>
+    <p class="auth-eyebrow">SUMATE A ADOPTME</p>
+    <h1>Crear cuenta</h1>
+    <p class="auth-description">Registrate para adoptar o publicar animales rescatados.</p>
+
+    @if (error) {
+      <div class="auth-error" role="alert">{{ error }}</div>
+    }
+
+    @if (cargandoRoles) {
+      <p class="form-loading">Cargando tipos de cuenta...</p>
+    } @else {
+      <label class="auth-field">
+        <span>Quiero registrarme como</span>
+        <select name="tipoUsuario" [(ngModel)]="tipoUsuarioId" required>
+          @for (role of roles; track role.id_tipo_usuario) {
+            <option [ngValue]="role.id_tipo_usuario">{{ role.nombre }}</option>
+          }
+        </select>
+      </label>
+    }
+
+    <label class="auth-field">
+      <span>Nombre completo</span>
+      <input name="nombre" [(ngModel)]="nombre" required maxlength="150" autocomplete="name">
+    </label>
+    <label class="auth-field">
+      <span>Correo electrónico</span>
+      <input type="email" name="email" [(ngModel)]="email" required email maxlength="200" autocomplete="email">
+    </label>
+    <label class="auth-field">
+      <span>Teléfono <small>(opcional)</small></span>
+      <input name="telefono" [(ngModel)]="telefono" maxlength="20" autocomplete="tel">
+    </label>
+    <label class="auth-field">
+      <span>Sobre vos <small>(opcional)</small></span>
+      <textarea name="descripcion" [(ngModel)]="descripcion" maxlength="500" rows="3"
+                placeholder="Contá un poco sobre vos: tu experiencia con animales, tu hogar, por qué querés adoptar o rescatar..."></textarea>
+      <small class="char-count">{{ descripcion.length }}/500</small>
+    </label>
+    <div class="registration-photo">
+      <span>Foto de perfil <small>(opcional)</small></span>
+      <div class="registration-photo-picker">
+        @if (fotoPerfil) {
+          <img class="registration-photo-preview" [src]="fotoPerfil" alt="Vista previa de foto de perfil">
+        } @else {
+          <i class="bi bi-person-circle registration-photo-placeholder" aria-hidden="true"></i>
+        }
+        <label class="registration-photo-button">
+          Elegir foto
+          <input type="file" accept="image/*" (change)="seleccionarFoto($event)">
+        </label>
+      </div>
+      <small>Elegí una imagen de hasta 2 MB. Si no agregás una, se mostrará un ícono de usuario.</small>
+    </div>
+    <div class="register-location">
+      <label class="auth-field">
+        <span>Provincia</span>
+        <select name="provincia" [(ngModel)]="ubicacion.provincia" (ngModelChange)="ubicacion.elegirProvincia()" required>
+          <option value="" disabled>Seleccioná una provincia</option>
+          @for (provinciaOption of provincias; track provinciaOption) {
+            <option [value]="provinciaOption">{{ provinciaOption }}</option>
+          }
+        </select>
+      </label>
+      <label class="auth-field">
+        <span>Departamento</span>
+        <select name="departamento" [(ngModel)]="ubicacion.departamento" (ngModelChange)="ubicacion.elegirDepartamento()"
+                required [disabled]="!ubicacion.provincia || ubicacion.cargandoDepartamentos">
+          <option value="" disabled>
+            {{ !ubicacion.provincia ? 'Elegí una provincia' : ubicacion.cargandoDepartamentos ? 'Cargando...' : 'Seleccioná un departamento' }}
+          </option>
+          @for (departamentoOption of ubicacion.departamentos; track departamentoOption) {
+            <option [value]="departamentoOption">{{ departamentoOption }}</option>
+          }
+        </select>
+      </label>
+      <label class="auth-field">
+        <span>Localidad</span>
+        <select name="ciudad" [(ngModel)]="ubicacion.ciudad" required
+                [disabled]="!ubicacion.departamento || ubicacion.cargandoLocalidades">
+          <option value="" disabled>
+            {{ !ubicacion.departamento ? 'Elegí un departamento' : ubicacion.cargandoLocalidades ? 'Cargando...' : 'Seleccioná una localidad' }}
+          </option>
+          @for (localidadOption of ubicacion.localidades; track localidadOption) {
+            <option [value]="localidadOption">{{ localidadOption }}</option>
+          }
+        </select>
+      </label>
+    </div>
+    @if (ubicacion.error) {
+      <p class="password-mismatch">{{ ubicacion.error }}</p>
+    }
+    <div class="register-address">
+      <label class="auth-field address-street">
+        <span>Calle</span>
+        <input name="calle" [(ngModel)]="calle" required pattern=".*\S.*" maxlength="150"
+               autocomplete="address-line1" placeholder="Ej: Av. Pellegrini">
+      </label>
+      <label class="auth-field">
+        <span>Número</span>
+        <input name="numero" [(ngModel)]="numero" required pattern="\d{1,6}" maxlength="6"
+               inputmode="numeric" placeholder="Ej: 1250">
+      </label>
+      <label class="auth-field">
+        <span>Piso <small>(opcional)</small></span>
+        <input name="piso" [(ngModel)]="piso" maxlength="10" placeholder="Ej: 3">
+      </label>
+    </div>
+    @if (numero && !numeroValido) {
+      <p class="password-mismatch">El número debe tener solo dígitos.</p>
+    }
+    <label class="auth-field">
+      <span>Contraseña <small>(mínimo 6 caracteres)</small></span>
+      <input type="password" name="password" [(ngModel)]="password" required minlength="6"
+             autocomplete="new-password">
+    </label>
+    <label class="auth-field">
+      <span>Confirmar contraseña</span>
+      <input type="password" name="confirmarPassword" [(ngModel)]="confirmarPassword" required
+             autocomplete="new-password">
+    </label>
+    @if (confirmarPassword && !contrasenasCoinciden) {
+      <p class="password-mismatch">Las contraseñas no coinciden.</p>
+    }
+
+    <button class="auth-submit" type="submit"
+            [disabled]="registerForm.invalid || !ubicacion.completa || !contrasenasCoinciden || cargandoRoles || registrando || roles.length === 0">
+      @if (registrando) { <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Creando cuenta... }
+      @else { Crear cuenta }
+    </button>
+    <p class="auth-switch">¿Ya tenés una cuenta? <a routerLink="/login">Iniciar sesión</a></p>
+  </form>
+</section>

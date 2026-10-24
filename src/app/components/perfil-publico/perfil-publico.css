@@ -1,0 +1,46 @@
+:host { display: block; width: min(100%, 640px); }
+
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-bottom: 20px; padding: 0;
+  border: 0; background: none;
+  color: var(--text-gray); font: inherit; font-size: 14px;
+  cursor: pointer;
+}
+.back-link:hover { color: var(--orange); }
+
+.estado { color: var(--text-gray); }
+.estado.error { color: #a33b3b; }
+
+.perfil-card {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.perfil-header { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; }
+.avatar { color: #858079; font-size: 72px; line-height: 1; }
+.perfil-header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+.rol {
+  display: inline-block; margin-top: 6px; padding: 3px 10px;
+  border-radius: 999px;
+  background: #fdf0e8; color: var(--orange);
+  font-size: 12px; font-weight: 600;
+}
+
+.datos {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;
+  margin: 0;
+}
+.datos dt { color: #5f5b56; font-size: 12px; font-weight: 700; }
+.datos dd { margin: 4px 0 0; font-size: 14px; }
+
+.descripcion { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
+.descripcion h2 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+.descripcion p { margin: 0; color: #4a4642; font-size: 14px; line-height: 1.55; white-space: pre-line; }
+
+@media (max-width: 560px) {
+  .perfil-card { padding: 20px; }
+  .datos { grid-template-columns: 1fr; }
+}
+.dato-ancho { grid-column: 1 / -1; }

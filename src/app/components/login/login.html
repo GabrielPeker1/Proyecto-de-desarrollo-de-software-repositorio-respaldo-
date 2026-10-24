@@ -1,0 +1,29 @@
+<section class="auth-page">
+  <form class="auth-card" #loginForm="ngForm" (ngSubmit)="login()">
+    <a routerLink="/publicaciones" class="auth-brand">🐾 AdoptMe</a>
+    <p class="auth-eyebrow">QUÉ BUENO VERTE</p>
+    <h1>Iniciar sesión</h1>
+    <p class="auth-description">Ingresá a tu cuenta para continuar con las adopciones.</p>
+
+    @if (error) {
+      <div class="auth-error" role="alert">{{ error }}</div>
+    }
+
+    <label class="auth-field">
+      <span>Correo electrónico</span>
+      <input type="email" name="email" [(ngModel)]="email" required email autocomplete="email"
+             placeholder="tu@email.com">
+    </label>
+    <label class="auth-field">
+      <span>Contraseña</span>
+      <input type="password" name="password" [(ngModel)]="password" required minlength="6"
+             autocomplete="current-password" placeholder="Tu contraseña">
+    </label>
+
+    <button class="auth-submit" type="submit" [disabled]="loginForm.invalid || ingresando">
+      @if (ingresando) { <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Ingresando... }
+      @else { Iniciar sesión }
+    </button>
+    <p class="auth-switch">¿Todavía no tenés cuenta? <a routerLink="/registro">Crear una cuenta</a></p>
+  </form>
+</section>

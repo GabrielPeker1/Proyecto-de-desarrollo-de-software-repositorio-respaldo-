@@ -1,0 +1,48 @@
+<button type="button" class="back-link" (click)="volver()">
+  <i class="bi bi-arrow-left"></i> Volver
+</button>
+
+@if (cargando) {
+  <p class="estado">Cargando perfil...</p>
+} @else if (error || !perfil) {
+  <p class="estado error">{{ error || 'No se pudo cargar el perfil.' }}</p>
+} @else {
+  <section class="perfil-card">
+    <header class="perfil-header">
+      <i class="bi bi-person-circle avatar" aria-hidden="true"></i>
+      <div>
+        <h1>{{ perfil.nombre_completo }}</h1>
+        <span class="rol">{{ perfil.tipo_usuario }}</span>
+      </div>
+    </header>
+
+    <dl class="datos">
+      <div>
+        <dt>Provincia</dt>
+        <dd>{{ perfil.provincia || '—' }}</dd>
+      </div>
+      <div>
+        <dt>Departamento</dt>
+        <dd>{{ perfil.departamento || '—' }}</dd>
+      </div>
+      <div>
+        <dt>Localidad</dt>
+        <dd>{{ perfil.ciudad || '—' }}</dd>
+      </div>
+      <!-- Solo viene si el usuario hizo pública su dirección en Mi Perfil. -->
+      @if (perfil.calle) {
+        <div class="dato-ancho">
+          <dt>Dirección</dt>
+          <dd>{{ perfil.calle }} {{ perfil.numero }}@if (perfil.piso) {, piso {{ perfil.piso }}}</dd>
+        </div>
+      }
+    </dl>
+
+    @if (esRescatista) {
+      <div class="descripcion">
+        <h2>Sobre {{ perfil.nombre_completo }}</h2>
+        <p>{{ perfil.descripcion || 'Todavía no agregó una descripción.' }}</p>
+      </div>
+    }
+  </section>
+}
