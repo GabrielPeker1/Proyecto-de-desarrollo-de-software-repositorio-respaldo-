@@ -82,7 +82,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'adopcionesdb',      # nombre del schema 
         'USER': 'root',
-        'PASSWORD': 'Gabrielprox1!',
+        'PASSWORD': '',
         'HOST': 'localhost',
         'PORT': '3306',
     }
