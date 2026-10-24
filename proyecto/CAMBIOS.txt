@@ -1,0 +1,235 @@
+=====================================================================
+  AdoptMe - Grupo 15 - Registro de cambios (octubre 2026)
+=====================================================================
+
+Este archivo resume todo lo que se agregó/cambió en el backend (Django)
+y en el frontend (Angular). Leer primero la sección "QUÉ HACER AL BAJAR
+LOS CAMBIOS".
+
+
+---------------------------------------------------------------------
+ QUÉ HACER AL BAJAR LOS CAMBIOS
+---------------------------------------------------------------------
+
+1) Backend: correr las migraciones (OBLIGATORIO)
+
+       python manage.py migrate
+
+   Aplica las migraciones 0005 a 0013. Crean tablas y columnas nuevas y
+   cargan solas las provincias, departamentos y localidades de Argentina
+   (no hace falta internet, los datos están en adopciones/data/).
+
+2) Backend: en adopciones/settings.py poner la contraseña de TU MySQL en
+   DATABASES -> 'PASSWORD'.
+
+3) Frontend: NO hace falta "npm install" (no se agregaron paquetes).
+   Si el "ng serve" ya estaba corriendo, reiniciarlo una vez
+   (se cambió angular.json).
+
+4) En la app: volver a iniciar sesión (el login ahora usa token, las
+   sesiones viejas no sirven).
+
+5) No hay cuentas de Moderador y desde el registro ya no se pueden crear.
+   Para tener una, crearla desde el panel de Django (/admin/) o a mano en
+   la base con tipo_usuario = Moderador.
+
+
+---------------------------------------------------------------------
+ 1. UBICACIONES: PROVINCIA / DEPARTAMENTO / LOCALIDAD
+---------------------------------------------------------------------
+
+- Se cargó el catálogo oficial de Argentina (API Georef del IGN/INDEC):
+  24 provincias, 528 departamentos y 3932 localidades.
+  Tablas nuevas: provincias, departamentos, localidades.
+  Archivo de datos: adopciones/data/georef_argentina.json
+
+- Registro y Mi Perfil: la ubicación ya no se escribe a mano. Son 3
+  desplegables encadenados: Provincia -> Departamento -> Localidad.
+
+- Tabla ubicaciones: nueva columna "departamento". La localidad se sigue
+  guardando en la columna "ciudad".
+
+- El back valida que la combinación provincia/departamento/localidad
+  exista (ej: rechaza "Rosario" en Córdoba).
+
+- Se sacó el campo "Zona aproximada" del perfil (se completa sola con la
+  localidad).
+
+- Dirección: en Crear cuenta el campo "Dirección" se reemplazó por tres:
+  Calle, Número (solo dígitos) y Piso (opcional, para casas no hace falta).
+  Tabla ubicaciones: nuevas columnas calle, numero, piso.
+  La columna direccion_completa se sigue guardando, pero la arma el back
+  solo con las tres partes (ej: "Av. Pellegrini 1250, piso 3").
+  Calle, Número y Piso también se pueden editar desde Mi Perfil.
+  (Los usuarios registrados antes de esto tienen que completarlos una vez.)
+
+- Endpoints nuevos:
+    GET /api/departamentos/?provincia=Santa Fe
+    GET /api/localidades/?provincia=Santa Fe&departamento=Rosario
+
+- Usuarios registrados antes de este cambio: no tienen departamento.
+  Tienen que completarlo una vez en Mi Perfil.
+
+
+---------------------------------------------------------------------
+ 2. PUBLICACIONES
+---------------------------------------------------------------------
+
+- La publicación HEREDA la ubicación del rescatista al crearse
+  (provincia, departamento, localidad). Es una copia: si después el
+  rescatista se muda, sus publicaciones viejas no cambian.
+  Tabla publicaciones: nuevas columnas provincia, departamento, localidad.
+
+- Si el rescatista no tiene departamento cargado, no puede publicar
+  (le pide completarlo en Mi Perfil).
+
+- Especie del animal: el desplegable ahora tiene solo Perro, Gato y Otro.
+  Si elige "Otro", aparece un campo para escribir la especie
+  (ej: "Conejo") y eso es lo que se guarda.
+
+- Fotos: el formato se detecta por el contenido del archivo y no por la
+  extensión. Antes fallaban imágenes ".png" que en realidad eran JPG o
+  WEBP (muy común en imágenes descargadas).
+
+- Si se intenta publicar un animal que no existe, devuelve un error
+  claro en vez de un error 500.
+
+
+---------------------------------------------------------------------
+ 3. PANTALLA DE INICIO (CATÁLOGO DEL ADOPTANTE)
+---------------------------------------------------------------------
+
+- Filtros: Provincia -> Departamento -> Localidad. Solo muestran lugares
+  donde hay mascotas en adopción.
+
+- Al entrar, se le selecciona automáticamente al adoptante su provincia
+  (siempre) y su departamento y localidad (si hay publicaciones ahí).
+
+- Botón "Limpiar filtros".
+
+- Endpoints nuevos:
+    GET /api/publicaciones/departamentos/?provincia=...
+    GET /api/publicaciones/localidades/?provincia=...&departamento=...
+
+
+---------------------------------------------------------------------
+ 4. DETALLE DE LA PUBLICACIÓN
+---------------------------------------------------------------------
+
+- Al hacer clic en la foto se abre en pantalla completa. Con varias
+  fotos se pasa con flechas (o con las flechas del teclado). Se cierra
+  con la X, con Esc o haciendo clic afuera.
+
+- Botón de solicitud según el estado:
+    sin solicitud  -> naranja  "Solicitar adopción"
+    pendiente      -> VERDE    "Solicitud enviada"
+    rechazada      -> ROJO     "Solicitud rechazada"
+    aceptada       -> "Ya tenés una solicitud aceptada"
+  (Se arregló además que el botón se quedaba trabado en
+  "Enviando solicitud..." después de enviarla.)
+
+
+---------------------------------------------------------------------
+ 5. PERFILES
+---------------------------------------------------------------------
+
+- Nuevo campo opcional "Sobre vos" (descripción, hasta 500 caracteres)
+  en Crear cuenta y en Mi Perfil. Tabla usuarios: columna "descripcion".
+
+- Perfil público de otro usuario (pantalla nueva, ruta /usuarios/:id):
+    * El adoptante ve el perfil del rescatista haciendo clic en su nombre
+      en el detalle de la publicación. Muestra: nombre, provincia,
+      departamento, localidad y descripción.
+    * El rescatista ve el perfil del adoptante haciendo clic en su nombre
+      en Solicitudes. Muestra: nombre, provincia, departamento y localidad
+      (sin descripción).
+    * Nunca se muestra email ni teléfono.
+    * La dirección (calle, número y piso) se muestra SOLO si el usuario la
+      hizo pública (ver abajo).
+  Endpoint nuevo: GET /api/usuarios/<id>/perfil-publico/
+
+- Privacidad de la dirección: es PRIVADA por defecto. Se cambia en
+  Mi Perfil -> Privacidad -> "Ocultar dirección exacta" (se guarda al
+  instante). Antes ese interruptor solo se guardaba en el navegador y no
+  hacía nada; ahora se guarda en la base.
+  Tabla usuarios: nueva columna direccion_publica (por defecto falso).
+
+
+---------------------------------------------------------------------
+ 6. SEGURIDAD: LOGIN CON TOKEN Y PERMISOS
+---------------------------------------------------------------------
+
+- El login (POST /api/login/) ahora devuelve un "token" además de los
+  datos del usuario. El front lo guarda y lo manda en cada pedido en el
+  header:   Authorization: Bearer <token>
+  El token dura 7 días; cuando vence, la app manda al login.
+  Archivo nuevo: adopciones/autenticacion.py
+  En el front: interceptors/auth.interceptor.ts lo agrega solo a cada
+  pedido.
+
+- El back ya NO confía en los ids que manda el front para saber quién
+  hace algo (rescatista_id, adoptante_id, emisor_id, id_rescatista,
+  id_moderador, etc.). Siempre usa el usuario del token.
+
+- Quién puede hacer qué:
+    Usuarios        Datos completos (email, teléfono, dirección): solo
+                    uno mismo o un moderador. Editar y cambiar
+                    contraseña: solo uno mismo. Listar todos: moderador.
+    Registro        Solo se pueden crear Adoptantes y Rescatistas.
+    Mi Perfil       No se puede cambiar el propio rol, el estado (ACTIVO/
+                    BAJA) ni la ubicación asignada (antes un usuario podía
+                    hacerse Moderador editando su perfil).
+    Ubicaciones     Solo su dueño o un moderador.
+    Animales/fotos  Crear: rescatista. Editar, subir fotos y borrar:
+                    el rescatista dueño. Tabla animales: nueva columna
+                    "rescatista" (id_rescatista).
+    Publicaciones   Ver: cualquiera. Crear: rescatista y solo con sus
+                    animales. Editar: el dueño. Borrar: dueño o moderador.
+    Solicitudes     Cada uno ve solo las suyas. Crear: adoptante.
+                    Aceptar/rechazar: el dueño de la publicación.
+    Chats/mensajes  Solo los dos participantes. El emisor sale del token.
+    Reportes        Reporta cualquiera a su nombre y ve solo los suyos.
+                    Gestionarlos: moderador.
+    Bloqueos        Cada uno ve los suyos. Desbloquear: quien bloqueó.
+
+- Respuestas de error: 401 = no inició sesión / token vencido,
+  403 = no tiene permiso para eso.
+
+
+---------------------------------------------------------------------
+ 7. OTROS
+---------------------------------------------------------------------
+
+- angular.json: se agregó "poll": 1000 al "ng serve". En algunas PCs con
+  Windows el servidor de Angular no detectaba los cambios en los
+  archivos; con esto los revisa cada 1 segundo.
+
+
+---------------------------------------------------------------------
+ MIGRACIONES NUEVAS (adopciones/migrations/)
+---------------------------------------------------------------------
+
+  0005_catalogo_ubicaciones            tablas provincias, departamentos,
+                                       localidades + columna departamento
+  0006_cargar_catalogo_ubicaciones     carga los datos de Georef
+  0007_ubicacion_publicaciones         columnas de ubicación en publicaciones
+  0008_heredar_ubicacion_publicaciones completa las publicaciones existentes
+  0009_descripcion_usuarios            columna descripcion en usuarios
+  0010_rescatista_animales             columna rescatista en animales
+  0011_asignar_rescatista_animales     completa los animales existentes
+  0012_calle_numero_piso               columnas calle, numero y piso en ubicaciones
+  0013_direccion_publica               columna direccion_publica en usuarios
+
+
+---------------------------------------------------------------------
+ ARCHIVOS NUEVOS
+---------------------------------------------------------------------
+
+  Backend:
+    adopciones/autenticacion.py
+    adopciones/data/georef_argentina.json
+    adopciones/migrations/0005 a 0013
+
+  Frontend (src/app/):
+    components/perfil-publico/  (perfil-publico.ts, .html, .css)
+    interceptors/auth.interceptor.ts

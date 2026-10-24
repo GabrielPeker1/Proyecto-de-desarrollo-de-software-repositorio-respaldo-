@@ -1,0 +1,17 @@
+[
+  {
+    "model": "adopciones.tiposusuario",
+    "pk": 1,
+    "fields": { "nombre": "Adoptante" }
+  },
+  {
+    "model": "adopciones.tiposusuario",
+    "pk": 2,
+    "fields": { "nombre": "Rescatista" }
+  },
+  {
+    "model": "adopciones.tiposusuario",
+    "pk": 3,
+    "fields": { "nombre": "Moderador" }
+  }
+]
