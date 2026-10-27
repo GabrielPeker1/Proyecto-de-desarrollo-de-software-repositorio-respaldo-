@@ -34,6 +34,10 @@ export class Login {
     this.authService.login(this.email.trim(), this.password).subscribe({
       next: () => {
         this.toastr.success('Sesión iniciada.');
+        if (this.authService.esModerador()) {
+          this.router.navigateByUrl('/moderacion');
+          return;
+        }
         const requestedUrl = this.route.snapshot.queryParamMap.get('returnUrl');
         const destination = requestedUrl?.startsWith('/') && !requestedUrl.startsWith('//')
           ? requestedUrl

@@ -196,3 +196,34 @@
   .message-list { padding: 16px 12px; }
   .message-bubble { max-width: 88%; }
 }
+
+.persona-link {
+  color: var(--text-dark);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.persona-link:hover { color: var(--orange); text-decoration: underline; }
+
+.heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+.btn-reportar {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border: 1px solid #e6c9c9; border-radius: 8px;
+  background: #fff; color: #a33b3b; font-size: 12px; font-weight: 600;
+}
+.btn-reportar:hover { background: #fff5f5; }
+
+.btn-bloquear {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; color: #4a4642; font-size: 12px; font-weight: 600;
+}
+.btn-bloquear:hover { background: #f7f5f2; }
+.btn-bloquear:disabled { cursor: not-allowed; opacity: .55; }
+
+.chat-bloqueado {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 16px 18px; border-top: 1px solid var(--border);
+  background: #faf8f5; color: var(--text-gray); font-size: 13px;
+}

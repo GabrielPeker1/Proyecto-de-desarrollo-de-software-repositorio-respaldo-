@@ -49,6 +49,16 @@ export class UsuarioService {
     return this.http.post<any>(`${this.baseUrl}/${id}/baja/`, {});
   }
 
+  /** Panel de moderación: usuarios suspendidos, dados de baja o con strikes. */
+  getSancionados(): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/`, { params: { sancionados: 'true' } });
+  }
+
+  /** Solo moderadores: 'levantar-suspension' o 'reiniciar-strikes'. */
+  quitarSancion(id: number, accion: 'levantar-suspension' | 'reiniciar-strikes'): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/${id}/sancion/${accion}/`, {});
+  }
+
   cambiarPassword(id: number, passwordActual: string, passwordNuevo: string): Observable<any> {
     return this.http.post<any>(`${this.baseUrl}/${id}/cambiar-password/`, {
       password_actual: passwordActual,

@@ -44,3 +44,47 @@
   .datos { grid-template-columns: 1fr; }
 }
 .dato-ancho { grid-column: 1 / -1; }
+
+.reporte { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
+.btn-reportar {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border: 1px solid #e6c9c9; border-radius: 7px;
+  background: #fff; color: #a33b3b; font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.btn-reportar:hover { background: #fff5f5; }
+.reporte-bloqueado { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text-gray); font-size: 13px; }
+.reporte-form { display: grid; gap: 10px; }
+.reporte-form label { font-size: 14px; font-weight: 700; }
+.reporte-form textarea {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid #e3dfda; border-radius: 7px;
+  font: inherit; font-size: 14px; resize: vertical;
+}
+.reporte-form textarea:focus { border-color: var(--green-dark); outline: 3px solid rgba(45,90,74,.12); }
+.reporte-aviso { margin: 0; color: var(--text-gray); font-size: 12px; }
+.reporte-acciones { display: flex; justify-content: flex-end; gap: 10px; }
+.btn-cancelar, .btn-enviar {
+  padding: 8px 16px; border-radius: 7px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-cancelar { border: 1px solid var(--border); background: #fff; color: var(--text-dark); }
+.btn-enviar { border: 0; background: #a33b3b; color: #fff; }
+.btn-enviar:disabled, .btn-cancelar:disabled { cursor: not-allowed; opacity: .55; }
+.reporte-form select {
+  width: 100%; padding: 9px 11px;
+  border: 1px solid #e3dfda; border-radius: 7px;
+  font: inherit; font-size: 14px; background: #fff;
+}
+
+.btn-bloquear {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; color: #4a4642; font-size: 12px; font-weight: 600;
+}
+.btn-bloquear:hover { background: #f7f5f2; }
+.btn-bloquear:disabled { cursor: not-allowed; opacity: .55; }
+.perfil-header .btn-bloquear { margin-left: auto; align-self: flex-start; }
+.aviso-bloqueo {
+  display: flex; align-items: center; gap: 6px;
+  margin: -12px 0 20px; color: #a33b3b; font-size: 13px;
+}

@@ -1,0 +1,265 @@
+@if (!esModerador) {
+  <section class="auth-page">
+    <form class="auth-card" #loginForm="ngForm" (ngSubmit)="ingresar()">
+      <span class="auth-brand"><i class="bi bi-shield-lock"></i> AdoptMe · Moderación</span>
+      <h1>Acceso de moderadores</h1>
+      <p class="auth-description">Ingresá con tu cuenta de moderador para revisar los reportes.</p>
+
+      @if (errorLogin) {
+        <div class="auth-error" role="alert">{{ errorLogin }}</div>
+      }
+
+      <label class="auth-field">
+        <span>Correo electrónico</span>
+        <input type="email" name="email" [(ngModel)]="email" required email autocomplete="username">
+      </label>
+      <label class="auth-field">
+        <span>Contraseña</span>
+        <input type="password" name="password" [(ngModel)]="password" required autocomplete="current-password">
+      </label>
+
+      <button class="auth-submit" type="submit" [disabled]="loginForm.invalid || ingresando">
+        {{ ingresando ? 'Ingresando...' : 'Ingresar' }}
+      </button>
+    </form>
+  </section>
+} @else {
+  <section class="panel">
+    <header class="panel-header">
+      <h1><i class="bi bi-shield-check"></i> Moderación</h1>
+      <p>Revisá los reportes de los usuarios y decidí qué hacer con cada uno.</p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" [class.active]="pestana === 'pendientes'" (click)="cambiarPestana('pendientes')">
+        Pendientes
+      </button>
+      <button type="button" role="tab" [class.active]="pestana === 'resueltos'" (click)="cambiarPestana('resueltos')">
+        Resueltos
+      </button>
+      <button type="button" role="tab" [class.active]="pestana === 'sancionados'" (click)="cambiarPestana('sancionados')">
+        Usuarios sancionados
+      </button>
+    </nav>
+
+    @if (cargando) {
+      <p class="vacio">Cargando...</p>
+    } @else if (pestana === 'sancionados') {
+      @if (sancionados.length === 0) {
+        <p class="vacio">No hay usuarios sancionados.</p>
+      }
+      @for (usuario of sancionados; track usuario.id_usuario) {
+        <article class="tarjeta">
+          <div class="tarjeta-fila">
+            <div>
+              <strong>{{ usuario.nombre_completo }}</strong>
+              <span class="detalle">{{ usuario.email }} · {{ usuario.tipo_usuario?.nombre }}</span>
+            </div>
+            <div class="chips">
+              @if (usuario.estado === 'BAJA') {
+                <span class="chip chip-rojo">Dado de baja</span>
+              } @else if (estaSuspendido(usuario)) {
+                <span class="chip chip-rojo">Suspendido hasta {{ usuario.suspendido_hasta | date:'dd/MM/yyyy HH:mm' }}</span>
+              }
+              @if (usuario.strikes_reporte > 0) {
+                <span class="chip" [class.chip-rojo]="usuario.strikes_reporte >= maxStrikes">
+                  {{ usuario.strikes_reporte }}/{{ maxStrikes }} strikes
+                  @if (usuario.strikes_reporte >= maxStrikes) { · reportes bloqueados }
+                </span>
+              }
+            </div>
+          </div>
+          <div class="acciones">
+            @if (usuario.estado === 'BAJA' || estaSuspendido(usuario)) {
+              <button type="button" class="btn" (click)="quitarSancion(usuario, 'levantar-suspension')">
+                Levantar suspensión
+              </button>
+            }
+            @if (usuario.strikes_reporte > 0) {
+              <button type="button" class="btn" (click)="quitarSancion(usuario, 'reiniciar-strikes')">
+                Reiniciar strikes
+              </button>
+            }
+          </div>
+        </article>
+      }
+    } @else {
+      @if (reportes.length === 0) {
+        <p class="vacio">{{ pestana === 'pendientes' ? 'No hay reportes pendientes.' : 'Todavía no hay reportes resueltos.' }}</p>
+      }
+      @for (reporte of reportes; track reporte.id_reporte) {
+        <article class="tarjeta">
+          <div class="tarjeta-fila">
+            <span class="detalle">Reporte #{{ reporte.id_reporte }} · {{ reporte.fecha_reporte | date:'dd/MM/yyyy HH:mm' }}</span>
+            <span class="chip" [class.chip-azul]="reporte.estado === 'EN_REVISION'">
+              {{ reporte.estado === 'EN_REVISION' ? 'En revisión' : reporte.estado === 'PENDIENTE' ? 'Pendiente' : textoResolucion(reporte.resolucion) }}
+            </span>
+          </div>
+
+          <div class="personas">
+            <div>
+              <span class="etiqueta">Reportó</span>
+              <strong>{{ reporte.usuario_reportador.nombre_completo }}</strong>
+              <span class="detalle">
+                {{ reporte.usuario_reportador.tipo_usuario }} ·
+                {{ reporte.usuario_reportador.strikes_reporte }}/{{ maxStrikes }} strikes
+              </span>
+            </div>
+            <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            <div>
+              <span class="etiqueta">Reportado</span>
+              <strong>{{ reporte.usuario_reportado.nombre_completo }}</strong>
+              <span class="detalle">
+                {{ reporte.usuario_reportado.tipo_usuario }} ·
+                {{ reporte.usuario_reportado.reportes_aceptados }} reporte(s) aceptado(s)
+                @if (reporte.usuario_reportado.estado === 'BAJA') { · dado de baja }
+                @else if (reporte.usuario_reportado.suspendido_hasta) {
+                  · suspendido hasta {{ reporte.usuario_reportado.suspendido_hasta | date:'dd/MM/yyyy' }}
+                }
+              </span>
+            </div>
+          </div>
+
+          <div class="motivo">
+            <span class="chip chip-categoria">{{ textoCategoria(reporte.categoria) }}</span>
+            <p>{{ reporte.motivo }}</p>
+          </div>
+
+          @if (reporte.publicacion; as pub) {
+            <div class="publicacion-reportada">
+              <div class="publicacion-titulo">
+                <span class="etiqueta">Publicación reportada</span>
+                @if (!reporte.publicacion_existe) {
+                  <span class="chip chip-rojo">Ya fue eliminada</span>
+                }
+              </div>
+              @if (pub.fotos?.length) {
+                <div class="publicacion-fotos">
+                  @for (foto of pub.fotos; track foto) {
+                    <a [href]="foto" target="_blank" rel="noopener"><img [src]="foto" [alt]="'Foto de ' + pub.animal?.nombre"></a>
+                  }
+                </div>
+              }
+              <strong>{{ pub.animal?.nombre }}</strong>
+              <span class="detalle">
+                {{ pub.animal?.especie }} · {{ pub.animal?.raza || 'Sin raza' }} · {{ pub.animal?.edad }} año(s) · {{ pub.animal?.sexo }}
+                · {{ pub.localidad }}@if (pub.provincia) {, {{ pub.provincia }}}
+                · publicada el {{ pub.fecha_publicacion | date:'dd/MM/yyyy' }}
+              </span>
+              <p>{{ pub.descripcion || 'Sin descripción.' }}</p>
+              <span class="detalle">Así estaba la publicación cuando se reportó.</span>
+            </div>
+          }
+
+          <div class="evidencia">
+            @if (!reporte.evidencia?.length) {
+              <p class="detalle"><i class="bi bi-chat-square"></i> No tienen conversaciones entre ellos.</p>
+            } @else {
+              <button type="button" class="btn-evidencia" (click)="alternarEvidencia(reporte.id_reporte)">
+                <i class="bi" [class.bi-chevron-down]="!evidenciaAbierta.has(reporte.id_reporte)"
+                   [class.bi-chevron-up]="evidenciaAbierta.has(reporte.id_reporte)"></i>
+                {{ evidenciaAbierta.has(reporte.id_reporte) ? 'Ocultar' : 'Ver' }} conversación
+                ({{ reporte.evidencia.length }} mensajes)
+              </button>
+              @if (evidenciaAbierta.has(reporte.id_reporte)) {
+                @if (!reporte.evidencia_guardada) {
+                  <p class="detalle aviso-evidencia">
+                    Este reporte es anterior al guardado de evidencia: se muestra la conversación como está ahora.
+                  </p>
+                }
+                <ol class="conversacion">
+                  @for (mensaje of reporte.evidencia; track mensaje.id_mensaje) {
+                    <li [class.del-reportado]="mensaje.emisor_id === reporte.usuario_reportado.id_usuario">
+                      <div class="mensaje-cabecera">
+                        <strong>{{ mensaje.emisor }}</strong>
+                        @if (mensaje.emisor_id === reporte.usuario_reportado.id_usuario) {
+                          <span class="chip chip-rojo">reportado</span>
+                        }
+                        <span class="detalle">{{ mensaje.fecha_envio | date:'dd/MM/yyyy HH:mm' }} · chat por {{ mensaje.animal }}</span>
+                      </div>
+                      <p>{{ mensaje.contenido }}</p>
+                    </li>
+                  }
+                </ol>
+              }
+            }
+          </div>
+
+          @if (reporte.estado === 'ACEPTADO' || reporte.estado === 'RECHAZADO') {
+            <p class="detalle">
+              Resuelto por {{ reporte.moderador?.nombre_completo }} el {{ reporte.fecha_resolucion | date:'dd/MM/yyyy HH:mm' }}
+              @if (reporte.nota_moderador) { · Nota: {{ reporte.nota_moderador }} }
+            </p>
+          } @else if (reporteAbierto !== reporte.id_reporte) {
+            <div class="acciones">
+              <button type="button" class="btn" (click)="abrirResolucion(reporte, 'ignorar')">
+                <i class="bi bi-eye-slash"></i> Ignorar
+              </button>
+              <button type="button" class="btn" (click)="abrirResolucion(reporte, 'advertir')">
+                <i class="bi bi-exclamation-triangle"></i> Enviar advertencia
+              </button>
+              <button type="button" class="btn btn-peligro" (click)="abrirResolucion(reporte, 'suspender')">
+                <i class="bi bi-slash-circle"></i> Suspender
+              </button>
+              <button type="button" class="btn" (click)="abrirResolucion(reporte, 'strike')">
+                <i class="bi bi-flag"></i> Strike al que reportó
+              </button>
+            </div>
+          } @else {
+            <form class="resolucion" (ngSubmit)="confirmar(reporte)">
+              @switch (accion) {
+                @case ('ignorar') {
+                  <p>El reporte se cierra sin consecuencias para nadie.</p>
+                }
+                @case ('advertir') {
+                  <label>
+                    <span>Mensaje para {{ reporte.usuario_reportado.nombre_completo }}</span>
+                    <textarea name="mensaje" rows="3" required [(ngModel)]="mensaje"
+                              placeholder="Ej: Recibimos reportes por mensajes ofensivos. Te pedimos que..."></textarea>
+                  </label>
+                }
+                @case ('suspender') {
+                  <label>
+                    <span>Duración</span>
+                    <select name="dias" [(ngModel)]="dias">
+                      @for (opcion of opcionesDias; track opcion) {
+                        <option [ngValue]="opcion">{{ textoDias(opcion) }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span>Mensaje para el usuario (opcional)</span>
+                    <textarea name="mensaje" rows="2" [(ngModel)]="mensaje"></textarea>
+                  </label>
+                }
+                @case ('strike') {
+                  <p>
+                    {{ reporte.usuario_reportador.nombre_completo }} pasa a tener
+                    {{ reporte.usuario_reportador.strikes_reporte + 1 }}/{{ maxStrikes }} strikes.
+                    @if (reporte.usuario_reportador.strikes_reporte + 1 >= maxStrikes) {
+                      <strong>Se le va a bloquear la herramienta de reportes.</strong>
+                    }
+                  </p>
+                  <label>
+                    <span>Mensaje para el usuario (opcional)</span>
+                    <textarea name="mensaje" rows="2" [(ngModel)]="mensaje"></textarea>
+                  </label>
+                }
+              }
+              <label>
+                <span>Nota interna (opcional, no la ve el usuario)</span>
+                <input name="nota" [(ngModel)]="nota">
+              </label>
+              <div class="acciones">
+                <button type="button" class="btn" (click)="cerrarResolucion()" [disabled]="enviando">Cancelar</button>
+                <button type="submit" class="btn btn-primario" [disabled]="!puedeConfirmar">
+                  {{ enviando ? 'Guardando...' : 'Confirmar' }}
+                </button>
+              </div>
+            </form>
+          }
+        </article>
+      }
+    }
+  </section>
+}

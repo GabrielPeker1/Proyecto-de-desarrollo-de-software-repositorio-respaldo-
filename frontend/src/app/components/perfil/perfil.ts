@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { AuthService } from '../../services/auth';
 import { UsuarioService } from '../../services/usuario';
+import { Bloqueo, BloqueoService } from '../../services/bloqueo';
 import { SelectorUbicacion, UbicacionService } from '../../services/ubicacion';
 import { PROVINCIAS_ARGENTINAS } from '../../data/provincias';
 import { finalize } from 'rxjs';
@@ -43,9 +44,13 @@ export class Perfil implements OnInit {
   passwordActual = '';
   passwordNuevo = '';
   confirmarPasswordNuevo = '';
+  // Usuarios que bloqueé (solo los activos)
+  bloqueados: Bloqueo[] = [];
+  desbloqueando: number | null = null;
 
   constructor(
     private usuarios: UsuarioService,
+    private bloqueos: BloqueoService,
     private ubicaciones: UbicacionService,
     private auth: AuthService,
     private toastr: ToastrService,
@@ -66,6 +71,40 @@ export class Perfil implements OnInit {
     this.idUsuario = usuario.id_usuario;
     this.fotoPerfil = this.obtenerFotoPerfil(usuario.id_usuario);
     this.cargarPerfil(usuario);
+    this.cargarBloqueados();
+  }
+
+  private cargarBloqueados(): void {
+    this.bloqueos.getMios().subscribe({
+      next: res => {
+        const lista: Bloqueo[] = Array.isArray(res?.data) ? res.data : [];
+        this.bloqueados = lista.filter(b => b.estado === 'ACTIVO'
+          && b.usuario_bloqueador.id_usuario === this.idUsuario);
+        this.changeDetector.detectChanges();
+      },
+      error: error => console.error('No se pudieron cargar los usuarios bloqueados.', error)
+    });
+  }
+
+  desbloquear(bloqueo: Bloqueo): void {
+    if (this.desbloqueando) {
+      return;
+    }
+    this.desbloqueando = bloqueo.id_bloqueo;
+    this.bloqueos.desbloquear(bloqueo.id_bloqueo).subscribe({
+      next: () => {
+        this.bloqueados = this.bloqueados.filter(b => b.id_bloqueo !== bloqueo.id_bloqueo);
+        this.toastr.success(`Desbloqueaste a ${bloqueo.usuario_bloqueado.nombre_completo}.`);
+        this.desbloqueando = null;
+        this.changeDetector.detectChanges();
+      },
+      error: error => {
+        console.error('No se pudo desbloquear al usuario.', error);
+        this.toastr.error('No se pudo desbloquear al usuario.');
+        this.desbloqueando = null;
+        this.changeDetector.detectChanges();
+      }
+    });
   }
 
   guardar(): void {

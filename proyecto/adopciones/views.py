@@ -5,6 +5,7 @@ con un metodo por cada verbo HTTP, y siempre devolvemos
 Response({"status": "success", "data": ...}).
 """
 
+from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,6 +19,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.hashers import check_password, make_password
 from django.db.models import Q
 from django.db import transaction
+from django.utils import timezone
 
 from .models import (
     TiposUsuario,
@@ -32,6 +34,7 @@ from .models import (
     Chats,
     Mensajes,
     Reportes,
+    Alertas,
     Bloqueos,
 )
 from .serializers import (
@@ -48,10 +51,11 @@ from .serializers import (
     ChatsSerializer,
     MensajesSerializer,
     ReportesSerializer,
+    AlertasSerializer,
     BloqueosSerializer,
     CambiarPasswordSerializer,
 )
-from .autenticacion import generar_token
+from .autenticacion import generar_token, mensaje_suspension
 
 
 # ===========================================================================
@@ -116,6 +120,15 @@ def puede_editar_animal(request, animal):
 
 def participantes_chat(chat):
     return (chat.solicitud.adoptante_id, chat.solicitud.publicacion.rescatista_id)
+
+
+def hay_bloqueo(id_a, id_b):
+    """True si alguno de los dos bloqueo al otro (bloqueo activo)."""
+    return Bloqueos.objects.filter(
+        Q(usuario_bloqueador_id=id_a, usuario_bloqueado_id=id_b) |
+        Q(usuario_bloqueador_id=id_b, usuario_bloqueado_id=id_a),
+        estado=Bloqueos.ACTIVO
+    ).exists()
 
 
 # ===========================================================================
@@ -301,6 +314,14 @@ class UsuariosView(APIView):
             resultado = resultado.filter(tipo_usuario__nombre__iexact=tipo)
         if estado:
             resultado = resultado.filter(estado__iexact=estado)
+        # /api/usuarios/?sancionados=true -> los que tienen una sancion vigente
+        # (suspension, baja o strikes). Lo usa el panel de moderacion.
+        if request.query_params.get('sancionados') == 'true':
+            resultado = resultado.filter(
+                Q(suspendido_hasta__gt=timezone.now()) |
+                Q(estado=Usuarios.BAJA) |
+                Q(strikes_reporte__gt=0)
+            )
 
         serializer = UsuariosSerializer(resultado, many=True)
         return Response({'status': 'success', 'data': serializer.data}, status=200)
@@ -376,6 +397,9 @@ class LoginView(APIView):
 
         if usuario.estado == Usuarios.BAJA:
             return Response({'status': 'error', 'data': 'El usuario está dado de baja'},
+                            status=status.HTTP_403_FORBIDDEN)
+        if usuario.esta_suspendido():
+            return Response({'status': 'error', 'data': mensaje_suspension(usuario)},
                             status=status.HTTP_403_FORBIDDEN)
 
         return Response({'status': 'success', 'data': UsuariosSerializer(usuario).data,
@@ -770,17 +794,19 @@ class PublicacionesView(APIView):
                         status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, id):
-        # Aca es donde el rescatista cambia el estado: EN_ADOPCION / EN_PROCESO / ADOPTADO
+        # El rescatista edita su publicacion (el estado va por EstadoPublicacionView).
         resultado = get_object_or_404(Publicaciones, id_publicacion=id)
         if not request.user.is_authenticated:
             return sin_login()
         if resultado.rescatista_id != request.user.id_usuario:
             return Response({'status': 'error', 'data': 'Solo el rescatista propietario puede modificar esta publicación'},
                             status=status.HTTP_403_FORBIDDEN)
-        # El dueño y el animal de una publicacion no se cambian.
+        # El dueño y el animal de una publicacion no se cambian. El estado se cambia
+        # con /api/publicaciones/<id>/estado/, que controla los pasos.
         datos = request.data.copy()
         datos.pop('rescatista_id', None)
         datos.pop('animal_id', None)
+        datos.pop('estado', None)
         serializer = PublicacionesSerializer(resultado, data=datos, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -799,6 +825,56 @@ class PublicacionesView(APIView):
 
         resultado.delete()
         return Response({'status': 'success', 'data': 'Publicación eliminada'})
+
+
+class EstadoPublicacionView(APIView):
+    """POST /api/publicaciones/<id>/estado/   Body: { "estado": "EN_PROCESO" }
+    El rescatista dueño mueve su publicacion por estos pasos:
+      EN_ADOPCION -> EN_PROCESO   (tiene que haber aceptado al menos una solicitud)
+      EN_PROCESO  -> ADOPTADO     (se concreto la adopcion; las solicitudes pendientes
+                                   se rechazan solas)
+      EN_PROCESO  -> EN_ADOPCION  (la adopcion no se concreto)
+    ADOPTADO es el final: la publicacion no se borra, solo sale del catalogo.
+    """
+
+    PASOS = {
+        Publicaciones.EN_ADOPCION: (Publicaciones.EN_PROCESO,),
+        Publicaciones.EN_PROCESO: (Publicaciones.ADOPTADO, Publicaciones.EN_ADOPCION),
+        Publicaciones.ADOPTADO: (),
+    }
+
+    @transaction.atomic
+    def post(self, request, id):
+        if not request.user.is_authenticated:
+            return sin_login()
+        publicacion = get_object_or_404(Publicaciones.objects.select_for_update(), id_publicacion=id)
+        if publicacion.rescatista_id != request.user.id_usuario:
+            return Response({'status': 'error', 'data': 'Solo el rescatista propietario puede cambiar el estado'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        nuevo = str(request.data.get('estado', '')).upper()
+        if nuevo not in self.PASOS[publicacion.estado]:
+            if publicacion.estado == Publicaciones.ADOPTADO:
+                mensaje = 'La mascota ya fue adoptada: la publicación no se puede cambiar'
+            else:
+                mensaje = 'No se puede pasar de ' + publicacion.get_estado_display() + ' a ese estado'
+            return Response({'status': 'error', 'data': mensaje}, status=status.HTTP_400_BAD_REQUEST)
+
+        if nuevo == Publicaciones.EN_PROCESO and not publicacion.solicitudes.filter(
+                estado=SolicitudesAdopcion.ACEPTADA).exists():
+            return Response({'status': 'error',
+                             'data': 'Primero aceptá una solicitud de adopción para ponerla en proceso'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if nuevo == Publicaciones.ADOPTADO:
+            publicacion.solicitudes.filter(estado=SolicitudesAdopcion.PENDIENTE).update(
+                estado=SolicitudesAdopcion.RECHAZADA,
+                motivo_rechazo='La mascota ya fue adoptada.'
+            )
+
+        publicacion.estado = nuevo
+        publicacion.save(update_fields=['estado'])
+        return Response({'status': 'success', 'data': PublicacionesSerializer(publicacion).data})
 
 
 # ===========================================================================
@@ -869,6 +945,9 @@ class SolicitudesAdopcionView(APIView):
         if publicacion.estado == Publicaciones.ADOPTADO:
             return Response({'status': 'error', 'data': 'Esa publicación ya fue cerrada'},
                             status=status.HTTP_400_BAD_REQUEST)
+        if hay_bloqueo(adoptante_id, publicacion.rescatista_id):
+            return Response({'status': 'error', 'data': 'No podés enviar una solicitud a este rescatista'},
+                            status=status.HTTP_403_FORBIDDEN)
         if SolicitudesAdopcion.objects.filter(adoptante_id=adoptante_id, publicacion=publicacion).exists():
             return Response({'status': 'error', 'data': 'Ya enviaste una solicitud para esta publicación'},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -912,14 +991,15 @@ class SolicitudesAdopcionView(APIView):
 
 class AceptarSolicitudView(APIView):
     """POST /api/solicitudes/<id>/aceptar/   
-    Cuando el rescatista acepta pasan 3 cosas juntas:
+    Cuando el rescatista acepta pasan 2 cosas juntas:
       1) la solicitud queda ACEPTADA
-      2) la publicación pasa a EN_PROCESO
-      3) se crea el chat entre las dos partes
+      2) se crea el chat entre las dos partes
+    La publicacion no cambia de estado: el rescatista la pone EN_PROCESO
+    cuando quiera, con /api/publicaciones/<id>/estado/.
     """
 
-    # transaction.atomic hace que las 3 operaciones sean "todo o nada".
-    # Si falla la creacion del chat, se deshacen tambien los cambios de estado
+    # transaction.atomic hace que las operaciones sean "todo o nada".
+    # Si falla la creacion del chat, se deshace tambien el cambio de estado
     # y no nos queda la base a medio actualizar.
     @transaction.atomic
     def post(self, request, id):
@@ -958,10 +1038,6 @@ class AceptarSolicitudView(APIView):
         solicitud.estado = SolicitudesAdopcion.ACEPTADA
         solicitud.motivo_rechazo = None
         solicitud.save()
-
-        publicacion = solicitud.publicacion
-        publicacion.estado = Publicaciones.EN_PROCESO
-        publicacion.save()
 
         # get_or_create: si ya existe el chat lo trae, y si no lo crea.
         # Asi evitamos crear dos chats para la misma solicitud.
@@ -1119,13 +1195,7 @@ class MensajesView(APIView):
             return Response({'status': 'error', 'data': 'El emisor no pertenece a este chat'},
                             status=status.HTTP_403_FORBIDDEN)
 
-        hay_bloqueo = Bloqueos.objects.filter(
-            Q(usuario_bloqueador_id=adoptante_id, usuario_bloqueado_id=rescatista_id) |
-            Q(usuario_bloqueador_id=rescatista_id, usuario_bloqueado_id=adoptante_id),
-            estado=Bloqueos.ACTIVO
-        ).exists()   # .exists() solo pregunta "¿hay alguno?", es mas rpido que traerlos
-
-        if hay_bloqueo:
+        if hay_bloqueo(adoptante_id, rescatista_id):
             return Response({'status': 'error', 'data': 'No se puede enviar: hay un bloqueo activo'},
                             status=status.HTTP_403_FORBIDDEN)
 
@@ -1163,10 +1233,14 @@ class ReportesView(APIView):
             resultado = get_object_or_404(Reportes, id_reporte=id)
             if resultado.usuario_reportador_id != request.user.id_usuario and not es_moderador(request.user):
                 return sin_permiso()
-            serializer = ReportesSerializer(resultado)
+            serializer = ReportesSerializer(resultado, context={'moderador': es_moderador(request.user)})
             return Response({'status': 'success', 'data': serializer.data}, status=200)
 
-        resultado = Reportes.objects.all()
+        resultado = Reportes.objects.select_related(
+            'usuario_reportador__tipo_usuario', 'usuario_reportador__ubicacion',
+            'usuario_reportado__tipo_usuario', 'usuario_reportado__ubicacion',
+            'moderador__tipo_usuario', 'moderador__ubicacion'
+        ).all()
         if not es_moderador(request.user):
             resultado = resultado.filter(usuario_reportador_id=request.user.id_usuario)
         estado = request.query_params.get('estado', None)
@@ -1175,8 +1249,11 @@ class ReportesView(APIView):
             resultado = resultado.filter(estado__iexact=estado)
         if id_reportado:
             resultado = resultado.filter(usuario_reportado_id=id_reportado)
+        # ?pendientes=true -> los que todavia no se resolvieron (PENDIENTE o EN_REVISION)
+        if request.query_params.get('pendientes') == 'true':
+            resultado = resultado.filter(estado__in=(Reportes.PENDIENTE, Reportes.EN_REVISION))
 
-        serializer = ReportesSerializer(resultado, many=True)
+        serializer = ReportesSerializer(resultado, many=True, context={'moderador': es_moderador(request.user)})
         return Response({'status': 'success', 'data': serializer.data}, status=200)
 
     def post(self, request):
@@ -1185,12 +1262,53 @@ class ReportesView(APIView):
             return sin_login()
         datos = datos_con(request, usuario_reportador_id=request.user.id_usuario)
         datos.pop('moderador_id', None)
+        # Si se reporta una publicacion, el reportado es siempre su rescatista
+        # (no el que mande el front).
+        id_publicacion = str(datos.get('publicacion_id') or '')
+        if id_publicacion:
+            publicacion = Publicaciones.objects.filter(
+                id_publicacion=id_publicacion
+            ).first() if id_publicacion.isdigit() else None
+            if publicacion is None:
+                return Response({'status': 'error', 'data': 'La publicación que querés reportar no existe'},
+                                status=status.HTTP_404_NOT_FOUND)
+            datos['usuario_reportado_id'] = publicacion.rescatista_id
+        else:
+            datos.pop('publicacion_id', None)
         if str(datos.get('usuario_reportado_id')) == str(request.user.id_usuario):
             return Response({'status': 'error', 'data': 'No podés reportarte a vos mismo'},
                             status=status.HTTP_400_BAD_REQUEST)
+        # Con 3 strikes por reportar sin motivo se le bloquea la herramienta.
+        if not request.user.puede_reportar():
+            return Response({'status': 'error',
+                             'data': 'Tu herramienta de reportes está bloqueada por reportes sin motivo'},
+                            status=status.HTTP_403_FORBIDDEN)
+        id_reportado = str(datos.get('usuario_reportado_id') or '')
+        reportado = Usuarios.objects.select_related('tipo_usuario').filter(
+            id_usuario=id_reportado
+        ).first() if id_reportado.isdigit() else None
+        if reportado is None:
+            return Response({'status': 'error', 'data': 'El usuario que querés reportar no existe'},
+                            status=status.HTTP_404_NOT_FOUND)
+        if es_moderador(reportado):
+            return Response({'status': 'error', 'data': 'No se puede reportar a un moderador'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # Un mismo usuario no puede tener dos reportes abiertos contra la misma persona.
+        ya_reportado = Reportes.objects.filter(
+            usuario_reportador_id=request.user.id_usuario,
+            usuario_reportado=reportado,
+            estado__in=(Reportes.PENDIENTE, Reportes.EN_REVISION)
+        ).exists()
+        if ya_reportado:
+            return Response({'status': 'error', 'data': 'Ya tenés un reporte pendiente contra este usuario'},
+                            status=status.HTTP_400_BAD_REQUEST)
         serializer = ReportesSerializer(data=datos)
         if serializer.is_valid():
-            serializer.save()
+            reporte = serializer.save()
+            # Guardamos la conversacion entre los dos como evidencia para el moderador.
+            reporte.evidencia = reporte.armar_evidencia()
+            reporte.publicacion_reportada = reporte.armar_copia_publicacion()
+            reporte.save(update_fields=['evidencia', 'publicacion_reportada'])
             return Response({'status': 'success', 'data': serializer.data},
                             status=status.HTTP_201_CREATED)
         return Response({'status': 'error', 'data': serializer.errors},
@@ -1216,12 +1334,22 @@ class ReportesView(APIView):
 
 
 class GestionarReporteView(APIView):
-    """POST /api/reportes/<id>/<accion>/  donde accion = revisar | aceptar | rechazar
-    Son los tres metodos que el Moderador tiene en el diagrama de dominio:
-    revisarReporte(), aceptarReporte() y rechazarReporte().
-    El moderador se identifica por su token.
+    """POST /api/reportes/<id>/<accion>/   (solo moderadores)
+    Son los metodos del Moderador en el diagrama de dominio:
+      revisar   -> lo marca EN_REVISION (lo esta mirando un moderador)
+      ignorar   -> RECHAZADO, no pasa nada (el reporte no amerita sancion)
+      advertir  -> ACEPTADO, le manda una alerta de comportamiento al reportado
+                   Body: { "mensaje": "..." }
+      suspender -> ACEPTADO, suspende al reportado X dias (0 = baja definitiva)
+                   Body: { "dias": 7, "mensaje": "..." (opcional) }
+      strike    -> RECHAZADO, le suma un strike al que reporto sin motivo.
+                   Con 3 strikes no puede reportar mas.
+    Todas aceptan "nota" (nota interna del moderador). El moderador es el del token.
     """
 
+    DIAS_MAXIMOS = 365
+
+    @transaction.atomic
     def post(self, request, id, accion):
         if not request.user.is_authenticated:
             return sin_login()
@@ -1229,25 +1357,135 @@ class GestionarReporteView(APIView):
             return Response({'status': 'error', 'data': 'Solo un moderador puede gestionar reportes'},
                             status=status.HTTP_403_FORBIDDEN)
         moderador = request.user
-        reporte = get_object_or_404(Reportes, id_reporte=id)
+        # select_for_update bloquea la fila: si dos moderadores resuelven a la vez,
+        # el segundo ve el reporte ya resuelto y no se aplica dos veces la sancion.
+        reporte = get_object_or_404(
+            Reportes.objects.select_for_update().select_related('usuario_reportador', 'usuario_reportado'),
+            id_reporte=id
+        )
 
-        # Un diccionario para traducir la accion de la URL al estado del reporte.
-        # Queda mas corto que hacer tres if seguidos.
-        acciones = {
-            'revisar': Reportes.EN_REVISION,
-            'aceptar': Reportes.ACEPTADO,
-            'rechazar': Reportes.RECHAZADO,
-        }
-
-        if accion not in acciones:
+        if accion not in ('revisar', 'ignorar', 'advertir', 'suspender', 'strike'):
             return Response({'status': 'error', 'data': 'Acción inválida'},
                             status=status.HTTP_400_BAD_REQUEST)
+        if reporte.estado not in (Reportes.PENDIENTE, Reportes.EN_REVISION):
+            return Response({'status': 'error', 'data': 'Este reporte ya fue resuelto'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-        reporte.estado = acciones[accion]
         reporte.moderador = moderador
-        reporte.save()
+        if accion == 'revisar':
+            reporte.estado = Reportes.EN_REVISION
+            reporte.save()
+            return Response({'status': 'success',
+                             'data': ReportesSerializer(reporte, context={'moderador': True}).data})
 
-        return Response({'status': 'success', 'data': ReportesSerializer(reporte).data})
+        reportado = reporte.usuario_reportado
+        reportador = reporte.usuario_reportador
+        mensaje = str(request.data.get('mensaje') or '').strip()
+
+        if accion == 'ignorar':
+            reporte.estado = Reportes.RECHAZADO
+            reporte.resolucion = Reportes.IGNORADO
+
+        elif accion == 'advertir':
+            if not mensaje:
+                return Response({'status': 'error', 'data': 'Escribí el mensaje de la advertencia'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            reporte.estado = Reportes.ACEPTADO
+            reporte.resolucion = Reportes.ADVERTENCIA
+            Alertas.objects.create(usuario=reportado, reporte=reporte,
+                                   tipo=Alertas.ADVERTENCIA, mensaje=mensaje)
+
+        elif accion == 'suspender':
+            dias = str(request.data.get('dias', '')).strip()
+            if not dias.isdigit() or int(dias) > self.DIAS_MAXIMOS:
+                return Response({'status': 'error',
+                                 'data': 'Indicá los días de suspensión (0 a 365; 0 = baja definitiva)'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            dias = int(dias)
+            if dias == 0:
+                reportado.estado = Usuarios.BAJA
+                reportado.save(update_fields=['estado'])
+                aviso = 'Tu cuenta fue dada de baja por un moderador.'
+            else:
+                reportado.suspendido_hasta = timezone.now() + timedelta(days=dias)
+                reportado.save(update_fields=['suspendido_hasta'])
+                aviso = 'Tu cuenta estuvo suspendida ' + str(dias) + (' día' if dias == 1 else ' días') + '.'
+            reporte.estado = Reportes.ACEPTADO
+            reporte.resolucion = Reportes.SUSPENSION
+            # La ve cuando vuelve a entrar despues de la suspension.
+            Alertas.objects.create(usuario=reportado, reporte=reporte, tipo=Alertas.SUSPENSION,
+                                   mensaje=(aviso + ' ' + mensaje).strip())
+
+        elif accion == 'strike':
+            reportador.strikes_reporte += 1
+            reportador.save(update_fields=['strikes_reporte'])
+            reporte.estado = Reportes.RECHAZADO
+            reporte.resolucion = Reportes.STRIKE
+            texto = ('Un moderador revisó un reporte tuyo y consideró que no tenía motivo. '
+                     'Strike ' + str(reportador.strikes_reporte) + ' de ' + str(Usuarios.MAX_STRIKES_REPORTE) + '.')
+            if not reportador.puede_reportar():
+                texto += ' Tu herramienta de reportes quedó bloqueada.'
+            Alertas.objects.create(usuario=reportador, reporte=reporte, tipo=Alertas.STRIKE,
+                                   mensaje=(texto + ' ' + mensaje).strip())
+
+        reporte.nota_moderador = str(request.data.get('nota') or '').strip() or None
+        reporte.fecha_resolucion = timezone.now()
+        reporte.save()
+        return Response({'status': 'success',
+                         'data': ReportesSerializer(reporte, context={'moderador': True}).data})
+
+
+class GestionarSancionView(APIView):
+    """POST /api/usuarios/<id>/sancion/<accion>/   (solo moderadores)
+    Para deshacer sanciones desde el panel:
+      levantar-suspension -> borra la suspension y, si estaba de baja, lo reactiva
+      reiniciar-strikes   -> vuelve los strikes a 0 y le desbloquea los reportes
+    """
+
+    def post(self, request, id, accion):
+        if not es_moderador(request.user):
+            return sin_login() if not request.user.is_authenticated else sin_permiso()
+        usuario = get_object_or_404(Usuarios, id_usuario=id)
+        if accion == 'levantar-suspension':
+            usuario.suspendido_hasta = None
+            usuario.estado = Usuarios.ACTIVO
+            usuario.save(update_fields=['suspendido_hasta', 'estado'])
+        elif accion == 'reiniciar-strikes':
+            usuario.strikes_reporte = 0
+            usuario.save(update_fields=['strikes_reporte'])
+        else:
+            return Response({'status': 'error', 'data': 'Acción inválida'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response({'status': 'success', 'data': UsuariosSerializer(usuario).data})
+
+
+# ===========================================================================
+# /api/alertas/
+# ===========================================================================
+class AlertasView(APIView):
+    """Cada usuario ve solo sus alertas. /api/alertas/?leida=false -> las que no vio."""
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return sin_login()
+        resultado = Alertas.objects.filter(usuario_id=request.user.id_usuario)
+        leida = request.query_params.get('leida', None)
+        if leida is not None:
+            resultado = resultado.filter(leida=(leida.lower() == 'true'))
+        serializer = AlertasSerializer(resultado, many=True)
+        return Response({'status': 'success', 'data': serializer.data}, status=200)
+
+
+class MarcarAlertaLeidaView(APIView):
+    """POST /api/alertas/<id>/leida/"""
+
+    def post(self, request, id):
+        if not request.user.is_authenticated:
+            return sin_login()
+        alerta = get_object_or_404(Alertas, id_alerta=id, usuario_id=request.user.id_usuario)
+        alerta.leida = True
+        alerta.save(update_fields=['leida'])
+        return Response({'status': 'success', 'data': AlertasSerializer(alerta).data})
 
 
 # ===========================================================================
@@ -1291,6 +1529,31 @@ class BloqueosView(APIView):
         if str(datos.get('usuario_bloqueado_id')) == str(request.user.id_usuario):
             return Response({'status': 'error', 'data': 'No podés bloquearte a vos mismo'},
                             status=status.HTTP_400_BAD_REQUEST)
+        id_bloqueado = str(datos.get('usuario_bloqueado_id') or '')
+        bloqueado = Usuarios.objects.select_related('tipo_usuario').filter(
+            id_usuario=id_bloqueado
+        ).first() if id_bloqueado.isdigit() else None
+        if bloqueado is None:
+            return Response({'status': 'error', 'data': 'El usuario que querés bloquear no existe'},
+                            status=status.HTTP_404_NOT_FOUND)
+        if es_moderador(bloqueado):
+            return Response({'status': 'error', 'data': 'No se puede bloquear a un moderador'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Hay un solo registro por pareja (unique_together): si ya lo habia
+        # desbloqueado, lo volvemos a activar en vez de crear otro.
+        existente = Bloqueos.objects.filter(
+            usuario_bloqueador_id=request.user.id_usuario, usuario_bloqueado=bloqueado
+        ).first()
+        if existente is not None:
+            if existente.estado == Bloqueos.ACTIVO:
+                return Response({'status': 'error', 'data': 'Ya bloqueaste a este usuario'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            existente.estado = Bloqueos.ACTIVO
+            existente.fecha_bloqueo = timezone.now()
+            existente.save(update_fields=['estado', 'fecha_bloqueo'])
+            return Response({'status': 'success', 'data': BloqueosSerializer(existente).data},
+                            status=status.HTTP_201_CREATED)
 
         serializer = BloqueosSerializer(data=datos)
         if serializer.is_valid():

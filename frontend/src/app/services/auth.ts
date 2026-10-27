@@ -51,4 +51,8 @@ export class AuthService {
   estaLogueado(): boolean {
     return !!this.usuarioSubject.value;
   }
+
+  esModerador(): boolean {
+    return String(this.usuarioSubject.value?.tipo_usuario?.nombre ?? '').toLocaleLowerCase() === 'moderador';
+  }
 }

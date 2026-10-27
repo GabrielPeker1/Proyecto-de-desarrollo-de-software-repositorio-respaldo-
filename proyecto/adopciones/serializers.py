@@ -25,6 +25,7 @@ from .models import (
     Chats,
     Mensajes,
     Reportes,
+    Alertas,
     Bloqueos,
 )
 
@@ -268,6 +269,11 @@ class UsuariosSerializer(serializers.ModelSerializer):
     # En la base guardamos el hash en password_encriptada.
     password = serializers.CharField(write_only=True, min_length=6)
 
+    puede_reportar = serializers.SerializerMethodField()
+
+    def get_puede_reportar(self, obj):
+        return obj.puede_reportar()
+
     def validate_password(self, value):
         if self.instance is not None:
             raise serializers.ValidationError('Usá el cambio de contraseña para actualizarla.')
@@ -276,12 +282,12 @@ class UsuariosSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuarios
         fields = ('id_usuario', 'email', 'nombre_completo', 'telefono', 'descripcion',
-                  'direccion_publica', 'estado',
-                  'ubicacion', 'tipo_usuario',
+                  'direccion_publica', 'estado', 'suspendido_hasta', 'strikes_reporte',
+                  'puede_reportar', 'ubicacion', 'tipo_usuario',
                   'ubicacion_id', 'tipo_usuario_id', 'provincia', 'departamento', 'ciudad',
                   'zona_aproximada', 'calle', 'numero', 'piso', 'password')
-        # El estado (ACTIVO/BAJA) solo lo cambia un moderador, con /usuarios/<id>/baja/.
-        read_only_fields = ('estado',)
+        # El estado (ACTIVO/BAJA), la suspension y los strikes solo los cambia un moderador.
+        read_only_fields = ('estado', 'suspendido_hasta', 'strikes_reporte')
 
     def validate(self, attrs):
         # Calle, numero y piso: si cambia alguno desde el perfil, se valida y se rearma
@@ -572,12 +578,41 @@ class ReportesSerializer(serializers.ModelSerializer):
     usuario_reportado_id = serializers.IntegerField(write_only=True)
     # required=False porque cuando se crea el reporte todavia no hay moderador
     moderador_id = serializers.IntegerField(write_only=True, required=False)
+    # Solo cuando se reporta una publicacion
+    publicacion_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = Reportes
-        fields = ('id_reporte', 'motivo', 'fecha_reporte', 'estado',
+        fields = ('id_reporte', 'categoria', 'motivo', 'fecha_reporte', 'estado',
+                  'resolucion', 'nota_moderador', 'fecha_resolucion',
                   'usuario_reportador', 'usuario_reportado', 'moderador',
-                  'usuario_reportador_id', 'usuario_reportado_id', 'moderador_id')
+                  'usuario_reportador_id', 'usuario_reportado_id', 'moderador_id', 'publicacion_id')
+        # La resolucion se carga con /api/reportes/<id>/<accion>/, no a mano.
+        read_only_fields = ('estado', 'resolucion', 'nota_moderador', 'fecha_resolucion')
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        # El moderador ve los antecedentes de los dos para decidir.
+        # Al usuario comun no le mandamos la nota interna ni datos del otro.
+        if self.context.get('moderador'):
+            data['usuario_reportador']['strikes_reporte'] = obj.usuario_reportador.strikes_reporte
+            reportado = obj.usuario_reportado
+            data['usuario_reportado']['suspendido_hasta'] = (
+                reportado.suspendido_hasta if reportado.esta_suspendido() else None
+            )
+            data['usuario_reportado']['reportes_aceptados'] = reportado.reportes_recibidos.filter(
+                estado=Reportes.ACEPTADO
+            ).count()
+            # Los reportes de antes de que existiera la evidencia no la tienen
+            # guardada: para esos mostramos la conversacion como esta ahora.
+            data['evidencia'] = obj.evidencia if obj.evidencia is not None else obj.armar_evidencia()
+            data['evidencia_guardada'] = obj.evidencia is not None
+            data['publicacion'] = obj.publicacion_reportada
+            # Si se borro despues del reporte, el moderador solo ve la copia.
+            data['publicacion_existe'] = obj.publicacion_id is not None
+        else:
+            data.pop('nota_moderador')
+        return data
 
     def get_usuario_reportador(self, obj):
         return UsuarioPublicoSerializer(obj.usuario_reportador).data
@@ -594,10 +629,12 @@ class ReportesSerializer(serializers.ModelSerializer):
         usuario_reportador_id = validated_data.pop('usuario_reportador_id')
         usuario_reportado_id = validated_data.pop('usuario_reportado_id')
         moderador_id = validated_data.pop('moderador_id', None)
+        publicacion_id = validated_data.pop('publicacion_id', None)
         return Reportes.objects.create(
             usuario_reportador_id=usuario_reportador_id,
             usuario_reportado_id=usuario_reportado_id,
             moderador_id=moderador_id,
+            publicacion_id=publicacion_id,
             **validated_data
         )
 
@@ -605,6 +642,7 @@ class ReportesSerializer(serializers.ModelSerializer):
         moderador_id = validated_data.pop('moderador_id', None)
         validated_data.pop('usuario_reportador_id', None)
         validated_data.pop('usuario_reportado_id', None)
+        validated_data.pop('publicacion_id', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -641,3 +679,9 @@ class BloqueosSerializer(serializers.ModelSerializer):
             usuario_bloqueado_id=usuario_bloqueado_id,
             **validated_data
         )
+
+
+class AlertasSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Alertas
+        fields = ('id_alerta', 'tipo', 'mensaje', 'fecha_alerta', 'leida')

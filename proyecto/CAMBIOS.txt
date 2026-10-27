@@ -15,7 +15,7 @@ LOS CAMBIOS".
 
        python manage.py migrate
 
-   Aplica las migraciones 0005 a 0013. Crean tablas y columnas nuevas y
+   Aplica las migraciones 0005 a 0016. Crean tablas y columnas nuevas y
    cargan solas las provincias, departamentos y localidades de Argentina
    (no hace falta internet, los datos están en adopciones/data/).
 
@@ -29,9 +29,13 @@ LOS CAMBIOS".
 4) En la app: volver a iniciar sesión (el login ahora usa token, las
    sesiones viejas no sirven).
 
-5) No hay cuentas de Moderador y desde el registro ya no se pueden crear.
-   Para tener una, crearla desde el panel de Django (/admin/) o a mano en
-   la base con tipo_usuario = Moderador.
+5) No hay cuentas de Moderador y desde el registro no se pueden crear.
+   Para tener una, correr (pide la contraseña por teclado):
+
+       python manage.py crear_moderador --email mod@adoptme.com --nombre "Moderador"
+
+   y entrar por http://localhost:4200/moderacion (o /administracion).
+   Ver la sección 8.
 
 
 ---------------------------------------------------------------------
@@ -206,6 +210,112 @@ LOS CAMBIOS".
 
 
 ---------------------------------------------------------------------
+ 8. MODERACIÓN Y REPORTES
+---------------------------------------------------------------------
+
+- Cualquier usuario puede reportar a otro desde su perfil público
+  (botón "Reportar usuario") o desde el chat (botón "Reportar"; el
+  nombre del otro en el chat también lleva a su perfil). Se elige una
+  categoría (insultos, acoso, posible estafa, spam, contenido
+  inapropiado, otro) y se cuenta qué pasó.
+
+- Evidencia: al reportar se guarda una copia de los mensajes entre los
+  dos usuarios (los últimos 200). El moderador la ve en el panel con
+  "Ver conversación", con los mensajes del reportado resaltados. Como es
+  una copia, si después se borran los mensajes la prueba no se pierde.
+
+- Reportar una publicación: en el detalle de la publicación está el
+  botón "Reportar publicación" (no aparece en las propias). El reporte
+  va contra el rescatista que la publicó y se guarda una copia de la
+  publicación (fotos, datos del animal, descripción). El moderador la ve
+  dentro del reporte, aunque después la editen o la borren. No se puede reportar a uno mismo, a un
+  moderador, ni tener dos reportes abiertos contra la misma persona.
+
+- Panel del moderador en /moderacion (/administracion redirige ahí).
+  Tiene su propio login: una cuenta común no entra aunque la contraseña
+  sea correcta. El moderador logueado solo ve el panel. Pestañas:
+    Pendientes            reportes sin resolver
+    Resueltos             historial con la decisión y la nota interna
+    Usuarios sancionados  suspendidos, dados de baja o con strikes
+
+- Qué puede hacer el moderador con cada reporte:
+    Ignorar              se cierra sin consecuencias
+    Enviar advertencia   el reportado ve una alerta con el mensaje
+    Suspender X días     el reportado no puede entrar hasta esa fecha
+                         (1, 3, 7, 15, 30 días o baja definitiva)
+    Strike al que reportó  si el reporte no tenía motivo. Con 3 strikes
+                         se le bloquea la herramienta de reportes.
+  Desde "Usuarios sancionados" se puede levantar una suspensión o
+  reiniciar los strikes.
+
+- Alertas: advertencias, suspensiones y strikes le llegan al usuario
+  como un aviso que aparece al entrar a la app hasta que toca "Entendido".
+
+- Endpoints nuevos:
+    POST /api/reportes/<id>/<accion>/   accion = revisar | ignorar |
+         advertir | suspender | strike  (reemplaza aceptar/rechazar)
+    POST /api/usuarios/<id>/sancion/levantar-suspension/
+    POST /api/usuarios/<id>/sancion/reiniciar-strikes/
+    GET  /api/usuarios/?sancionados=true
+    GET  /api/reportes/?pendientes=true
+    GET  /api/alertas/?leida=false
+    POST /api/alertas/<id>/leida/
+
+- Cómo se crea un moderador: con el comando crear_moderador (ver punto 5
+  de arriba). Es la forma recomendada porque guarda la contraseña con el
+  mismo hash que el registro y no queda escrita en ningún archivo.
+  NO cargarlo a mano en la base ni desde /admin/: la columna
+  password_encriptada espera el hash, y si se escribe la contraseña en
+  texto plano el login no funciona (y además queda expuesta).
+
+
+---------------------------------------------------------------------
+ 9. BLOQUEAR USUARIOS
+---------------------------------------------------------------------
+
+- Un usuario puede bloquear a otro sin reportarlo: botón "Bloquear" en
+  el perfil público y en el encabezado del chat. Pide confirmación.
+
+- Con un bloqueo activo (de cualquiera de los dos lados):
+    * no se pueden mandar mensajes (el chat muestra un aviso en lugar
+      de la caja de texto)
+    * no se pueden mandar solicitudes de adopción entre ellos
+    * no se ven las publicaciones del otro en el catálogo
+
+- Se desbloquea con el mismo botón ("Desbloquear") o desde Mi Perfil,
+  en la sección nueva "Usuarios bloqueados". Solo el que bloqueó puede
+  desbloquear. No se puede bloquear a un moderador.
+
+- Backend: se puede volver a bloquear a alguien que se había
+  desbloqueado (antes daba error), y bloquear a un usuario que no
+  existe devuelve 404 en vez de un error 500.
+
+
+---------------------------------------------------------------------
+ 10. ESTADO DE LA PUBLICACIÓN (EN PROCESO / ADOPTADO)
+---------------------------------------------------------------------
+
+- Aceptar una solicitud YA NO pone la publicación en proceso sola: solo
+  acepta la solicitud y abre el chat. El estado lo maneja el rescatista.
+
+- Pasos (los controla el back, POST /api/publicaciones/<id>/estado/):
+    En adopción -> En proceso    (tiene que haber una solicitud aceptada)
+    En proceso  -> Adoptado      (se concretó la adopción)
+    En proceso  -> En adopción   (la adopción no se concretó)
+  Adoptado es el estado final. La publicación NO se borra: sale del
+  catálogo pero se puede seguir viendo. Al marcarla como adoptada, las
+  solicitudes que seguían pendientes se rechazan solas con el motivo
+  "La mascota ya fue adoptada."
+
+- Dónde: en el detalle de la publicación (recuadro "Estado de la
+  publicación", solo para el dueño) y en Solicitudes, en las tarjetas
+  de solicitudes aceptadas ("Poner en proceso" / "Marcar como
+  adoptado"). Todos ven la etiqueta "En proceso" o "Adoptado".
+
+- El PATCH común de /api/publicaciones/<id>/ ya no cambia el estado.
+
+
+---------------------------------------------------------------------
  MIGRACIONES NUEVAS (adopciones/migrations/)
 ---------------------------------------------------------------------
 
@@ -219,6 +329,10 @@ LOS CAMBIOS".
   0011_asignar_rescatista_animales     completa los animales existentes
   0012_calle_numero_piso               columnas calle, numero y piso en ubicaciones
   0013_direccion_publica               columna direccion_publica en usuarios
+  0014_moderacion                      suspension y strikes en usuarios,
+                                       resolución en reportes, tabla alertas
+  0015_reportes_categoria_evidencia    categoría y evidencia en reportes
+  0016_reportes_publicacion            publicación reportada en reportes
 
 
 ---------------------------------------------------------------------
@@ -228,8 +342,13 @@ LOS CAMBIOS".
   Backend:
     adopciones/autenticacion.py
     adopciones/data/georef_argentina.json
-    adopciones/migrations/0005 a 0013
+    adopciones/migrations/0005 a 0016
+    adopciones/management/commands/crear_moderador.py
 
   Frontend (src/app/):
     components/perfil-publico/  (perfil-publico.ts, .html, .css)
     interceptors/auth.interceptor.ts
+    components/moderacion/      (moderacion.ts, .html, .css)
+    components/reportar-dialogo/ (ventana de reporte del chat y la publicación)
+    services/bloqueo.ts (antes estaba vacío)
+    services/alerta.ts

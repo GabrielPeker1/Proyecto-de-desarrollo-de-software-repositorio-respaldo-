@@ -140,6 +140,27 @@
           </label>
         </section>
 
+        <section class="settings-block blocked-block">
+          <h2>Usuarios bloqueados</h2>
+          @if (bloqueados.length === 0) {
+            <p>No bloqueaste a nadie. Podés bloquear a un usuario desde su perfil o desde el chat.</p>
+          } @else {
+            <ul>
+              @for (bloqueo of bloqueados; track bloqueo.id_bloqueo) {
+                <li>
+                  <span>
+                    <strong>{{ bloqueo.usuario_bloqueado.nombre_completo }}</strong>
+                    <small>{{ bloqueo.usuario_bloqueado.tipo_usuario }} · desde el {{ bloqueo.fecha_bloqueo | date:'dd/MM/yyyy' }}</small>
+                  </span>
+                  <button type="button" [disabled]="desbloqueando === bloqueo.id_bloqueo" (click)="desbloquear(bloqueo)">
+                    {{ desbloqueando === bloqueo.id_bloqueo ? 'Desbloqueando...' : 'Desbloquear' }}
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+
         <section class="settings-block security-block">
           <h2>Seguridad</h2>
           <p>Actualizá tu contraseña para mantener tu cuenta segura.</p>

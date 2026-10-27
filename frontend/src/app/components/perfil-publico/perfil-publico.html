@@ -14,7 +14,17 @@
         <h1>{{ perfil.nombre_completo }}</h1>
         <span class="rol">{{ perfil.tipo_usuario }}</span>
       </div>
+      @if (puedeVerReportar) {
+        <button type="button" class="btn-bloquear" [disabled]="procesandoBloqueo"
+                (click)="alternarBloqueo(perfil.nombre_completo)">
+          <i class="bi" [class.bi-slash-circle]="!bloqueoHecho" [class.bi-unlock]="bloqueoHecho"></i>
+          {{ bloqueoHecho ? 'Desbloquear' : 'Bloquear' }}
+        </button>
+      }
     </header>
+    @if (bloqueoHecho) {
+      <p class="aviso-bloqueo"><i class="bi bi-slash-circle"></i> Bloqueaste a este usuario.</p>
+    }
 
     <dl class="datos">
       <div>
@@ -42,6 +52,47 @@
       <div class="descripcion">
         <h2>Sobre {{ perfil.nombre_completo }}</h2>
         <p>{{ perfil.descripcion || 'Todavía no agregó una descripción.' }}</p>
+      </div>
+    }
+
+    @if (puedeVerReportar) {
+      <div class="reporte">
+        @if (reportesBloqueados) {
+          <p class="reporte-bloqueado">
+            <i class="bi bi-slash-circle"></i>
+            Tu herramienta de reportes está bloqueada por reportes sin motivo.
+          </p>
+        } @else if (!reportando) {
+          <button type="button" class="btn-reportar" (click)="reportando = true">
+            <i class="bi bi-flag"></i> Reportar usuario
+          </button>
+        } @else {
+          <form class="reporte-form" (ngSubmit)="enviarReporte()">
+            <label for="categoria-reporte">¿Por qué querés reportar a {{ perfil.nombre_completo }}?</label>
+            <select id="categoria-reporte" name="categoria" [(ngModel)]="categoriaReporte" required>
+              <option value="" disabled>Elegí una opción</option>
+              @for (categoria of categorias; track categoria.valor) {
+                <option [value]="categoria.valor">{{ categoria.texto }}</option>
+              }
+            </select>
+            <label for="motivo-reporte">Contá qué pasó</label>
+            <textarea id="motivo-reporte" name="motivo" rows="4" maxlength="1000" required
+                      [(ngModel)]="motivoReporte"
+                      placeholder="Contá qué pasó. Un moderador va a revisar el reporte."></textarea>
+            <p class="reporte-aviso">
+              Si tienen una conversación, el moderador va a poder verla.
+              Los reportes sin motivo suman un strike. Con 3 strikes no vas a poder reportar más.
+            </p>
+            <div class="reporte-acciones">
+              <button type="button" class="btn-cancelar" (click)="reportando = false" [disabled]="enviandoReporte">
+                Cancelar
+              </button>
+              <button type="submit" class="btn-enviar" [disabled]="!categoriaReporte || !motivoReporte.trim() || enviandoReporte">
+                {{ enviandoReporte ? 'Enviando...' : 'Enviar reporte' }}
+              </button>
+            </div>
+          </form>
+        }
       </div>
     }
   </section>

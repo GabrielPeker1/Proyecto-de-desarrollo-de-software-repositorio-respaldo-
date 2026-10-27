@@ -13,14 +13,14 @@
     <span class="notif-count">{{ solicitudesPendientes }}</span>
   </a>
   }
-  <a routerLink="/perfil" class="user-chip">
+  <a [routerLink]="esModerador ? '/moderacion' : '/perfil'" class="user-chip"
+     [title]="esModerador ? 'Ir al panel de moderación' : 'Ir a mi perfil'">
     @if (fotoPerfil) {
       <img [src]="fotoPerfil" [alt]="'Foto de ' + usuario.nombre_completo">
     } @else {
       <i class="bi bi-person-circle user-avatar-placeholder" role="img" aria-label="Sin foto de perfil"></i>
     }
     <span>{{ usuario.nombre_completo }}</span>
-    <i class="bi bi-chevron-down"></i>
   </a>
   }
   </div>
@@ -28,6 +28,11 @@
 
 <aside class="sidebar">
   <nav class="sidebar-nav">
+    @if (esModerador) {
+    <a routerLink="/moderacion" routerLinkActive="active" class="nav-item">
+      <i class="bi bi-shield-check"></i><span>Moderación</span>
+    </a>
+    } @else {
     <a routerLink="/publicaciones" routerLinkActive="active" class="nav-item">
       <i class="bi bi-house"></i><span>Inicio</span>
     </a>
@@ -45,6 +50,7 @@
     <a routerLink="/perfil" routerLinkActive="active" class="nav-item">
       <i class="bi bi-person"></i><span>Mi Perfil</span>
     </a>
+    }
   </nav>
 
   <div class="sidebar-bottom">
@@ -68,3 +74,17 @@
 <main [class.main-content]="usuario" [class.guest-content]="!usuario">
   <router-outlet></router-outlet>
 </main>
+
+@if (alertaActual; as alerta) {
+<div class="alerta-overlay">
+  <div class="alerta-modal" role="alertdialog" aria-labelledby="alerta-titulo" aria-describedby="alerta-mensaje">
+    <i class="bi alerta-icono" aria-hidden="true"
+       [class.bi-exclamation-triangle-fill]="alerta.tipo !== 'SUSPENSION'"
+       [class.bi-slash-circle-fill]="alerta.tipo === 'SUSPENSION'"></i>
+    <h2 id="alerta-titulo">{{ tituloAlerta }}</h2>
+    <p id="alerta-mensaje">{{ alerta.mensaje }}</p>
+    <span class="alerta-fecha">{{ alerta.fecha_alerta | date:'dd/MM/yyyy HH:mm' }}</span>
+    <button type="button" (click)="cerrarAlerta()">Entendido</button>
+  </div>
+</div>
+}

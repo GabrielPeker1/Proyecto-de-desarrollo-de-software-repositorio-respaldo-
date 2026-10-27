@@ -21,16 +21,40 @@
             <img [src]="chat?.solicitud?.foto_animal || 'https://placehold.co/80x80?text=🐾'"
                  [alt]="chat?.solicitud?.animal || 'Mascota'">
             <div>
-              <strong>{{ persona.nombre_completo || 'Usuario' }}</strong>
+              @if (persona.id_usuario) {
+                <a class="persona-link" [routerLink]="['/usuarios', persona.id_usuario]" title="Ver perfil">
+                  {{ persona.nombre_completo || 'Usuario' }}
+                </a>
+              } @else {
+                <strong>{{ persona.nombre_completo || 'Usuario' }}</strong>
+              }
               <span>{{ soyAdoptante ? 'Rescatista' : 'Adoptante' }}</span>
             </div>
           </div>
-          <a class="pet-chip" [routerLink]="['/publicaciones', chat.solicitud?.id_publicacion]">
-            <img [src]="chat.solicitud?.foto_animal || 'https://placehold.co/64x64?text=🐾'" alt="">
-            <span><strong>{{ chat.solicitud?.animal || 'Mascota' }}</strong><small>Ver publicación</small></span>
-            <i class="bi bi-arrow-up-right"></i>
-          </a>
+          <div class="heading-actions">
+            <a class="pet-chip" [routerLink]="['/publicaciones', chat.solicitud?.id_publicacion]">
+              <img [src]="chat.solicitud?.foto_animal || 'https://placehold.co/64x64?text=🐾'" alt="">
+              <span><strong>{{ chat.solicitud?.animal || 'Mascota' }}</strong><small>Ver publicación</small></span>
+              <i class="bi bi-arrow-up-right"></i>
+            </a>
+            @if (persona.id_usuario) {
+              <button type="button" class="btn-reportar" (click)="abrirReporte()"
+                      [title]="reportesBloqueados ? 'Tu herramienta de reportes está bloqueada' : 'Reportar a ' + persona.nombre_completo">
+                <i class="bi bi-flag"></i> Reportar
+              </button>
+              <button type="button" class="btn-bloquear" [disabled]="procesandoBloqueo"
+                (click)="alternarBloqueo(persona.nombre_completo)">
+          <i class="bi" [class.bi-slash-circle]="!bloqueoHecho" [class.bi-unlock]="bloqueoHecho"></i>
+          {{ bloqueoHecho ? 'Desbloquear' : 'Bloquear' }}
+        </button>
+            }
+          </div>
         </header>
+
+        @if (reportando) {
+          <app-reportar-dialogo [idUsuario]="persona.id_usuario" [nombre]="persona.nombre_completo"
+                                (cerrado)="reportando = false"></app-reportar-dialogo>
+        }
 
         <div class="message-list" #messageList aria-live="polite">
           @if (cargando) {
@@ -55,6 +79,17 @@
           }
         </div>
 
+        @if (bloqueoHecho) {
+          <div class="chat-bloqueado">
+            <i class="bi bi-slash-circle"></i>
+            Bloqueaste a {{ persona.nombre_completo }}. Desbloquealo para volver a escribirle.
+          </div>
+        } @else if (meBloquearon) {
+          <div class="chat-bloqueado">
+            <i class="bi bi-slash-circle"></i>
+            No podés enviar mensajes en esta conversación.
+          </div>
+        } @else {
         <form class="message-composer" (ngSubmit)="enviar()">
           <input name="mensaje" [(ngModel)]="texto" maxlength="2000"
                  placeholder="Escribí un mensaje..." aria-label="Escribí un mensaje">
@@ -63,6 +98,7 @@
             @else { Enviar }
           </button>
         </form>
+        }
       } @else if (cargando) {
         <p class="chat-state">Cargando conversación...</p>
       } @else {

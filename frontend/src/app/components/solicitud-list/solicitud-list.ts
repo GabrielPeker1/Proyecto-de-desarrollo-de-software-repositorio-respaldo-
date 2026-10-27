@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { AuthService } from '../../services/auth';
 import { SolicitudService } from '../../services/solicitud';
+import { PublicacionService } from '../../services/publicacion';
 
 @Component({
   standalone: true,
@@ -21,9 +22,11 @@ export class SolicitudList implements OnInit {
   solicitudRechazo: any = null;
   motivoRechazo = '';
   procesandoId: number | null = null;
+  cambiandoEstadoId: number | null = null;
 
   constructor(
     private solicitudesService: SolicitudService,
+    private publicaciones: PublicacionService,
     private auth: AuthService,
     private router: Router,
     private toastr: ToastrService,
@@ -94,6 +97,40 @@ export class SolicitudList implements OnInit {
         console.error('No se pudo aceptar la solicitud.', error);
         this.toastr.error(this.errorMessage(error));
         this.procesandoId = null;
+        this.changeDetector.detectChanges();
+      }
+    });
+  }
+
+  /** Pasa la publicación de la solicitud a EN_PROCESO o ADOPTADO (ver EstadoPublicacionView). */
+  cambiarEstadoPublicacion(solicitud: any, estado: 'EN_PROCESO' | 'ADOPTADO'): void {
+    const publicacion = solicitud.publicacion;
+    if (!publicacion?.id_publicacion || this.cambiandoEstadoId) {
+      return;
+    }
+    const nombre = this.nombreMascota(solicitud);
+    if (estado === 'ADOPTADO' && !window.confirm(
+      `¿Se concretó la adopción de ${nombre} con ${solicitud.adoptante?.nombre_completo || 'este adoptante'}? `
+      + 'La publicación va a quedar como adoptada y no se puede volver atrás. '
+      + 'Las solicitudes que sigan pendientes se van a rechazar.')) {
+      return;
+    }
+    this.cambiandoEstadoId = publicacion.id_publicacion;
+    this.publicaciones.cambiarEstado(publicacion.id_publicacion, estado).subscribe({
+      next: () => {
+        this.toastr.success(estado === 'ADOPTADO'
+          ? `¡Listo! ${nombre} quedó como adoptado.`
+          : 'La publicación quedó en proceso de adopción.');
+        this.cambiandoEstadoId = null;
+        // Recargamos: varias solicitudes comparten la publicación y al adoptar
+        // se rechazan las pendientes.
+        this.cargarSolicitudes();
+        this.solicitudesService.notificarActualizacion();
+      },
+      error: error => {
+        console.error('No se pudo cambiar el estado de la publicación.', error);
+        this.toastr.error(this.errorMessage(error));
+        this.cambiandoEstadoId = null;
         this.changeDetector.detectChanges();
       }
     });

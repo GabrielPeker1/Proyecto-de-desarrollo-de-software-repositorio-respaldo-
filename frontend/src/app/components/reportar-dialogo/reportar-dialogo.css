@@ -1,0 +1,28 @@
+.reporte-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(26, 26, 26, .45);
+}
+.reporte-modal {
+  display: grid; gap: 10px;
+  width: min(100%, 440px); padding: 24px;
+  border-radius: 14px; background: #fff;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
+}
+.reporte-modal h2 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+.reporte-modal label { font-size: 13px; font-weight: 600; }
+.reporte-modal select,
+.reporte-modal textarea {
+  width: 100%; padding: 9px 11px;
+  border: 1px solid #e3dfda; border-radius: 7px;
+  background: #fff; font: inherit; font-size: 14px;
+}
+.reporte-modal textarea { resize: vertical; }
+.reporte-modal select:focus,
+.reporte-modal textarea:focus { border-color: var(--green-dark); outline: 3px solid rgba(45,90,74,.12); }
+.reporte-aviso { margin: 0; color: var(--text-gray); font-size: 12px; }
+.reporte-acciones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.btn-cancelar, .btn-enviar { padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; }
+.btn-cancelar { border: 1px solid var(--border); background: #fff; color: var(--text-dark); }
+.btn-enviar { border: 0; background: #a33b3b; color: #fff; }
+.btn-enviar:disabled, .btn-cancelar:disabled { cursor: not-allowed; opacity: .55; }

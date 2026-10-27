@@ -89,6 +89,26 @@
                 <button type="button" class="reject-button" [disabled]="procesandoId === solicitud.id_solicitud"
                         (click)="abrirRechazo(solicitud)">Rechazar</button>
               }
+              @if (esRescatista && solicitud.estado === 'ACEPTADA') {
+                @if (solicitud.publicacion?.estado === 'EN_ADOPCION') {
+                  <button type="button" class="process-button"
+                          [disabled]="cambiandoEstadoId === solicitud.publicacion.id_publicacion"
+                          (click)="cambiarEstadoPublicacion(solicitud, 'EN_PROCESO')">
+                    <i class="bi bi-hourglass-split"></i> Poner en proceso
+                  </button>
+                } @else if (solicitud.publicacion?.estado === 'EN_PROCESO') {
+                  <button type="button" class="adopted-button"
+                          [disabled]="cambiandoEstadoId === solicitud.publicacion.id_publicacion"
+                          (click)="cambiarEstadoPublicacion(solicitud, 'ADOPTADO')">
+                    <i class="bi bi-heart-fill"></i> Marcar como adoptado
+                  </button>
+                }
+              }
+              @if (solicitud.publicacion?.estado === 'EN_PROCESO') {
+                <span class="publication-state in-process">Adopción en proceso</span>
+              } @else if (solicitud.publicacion?.estado === 'ADOPTADO') {
+                <span class="publication-state adopted"><i class="bi bi-heart-fill"></i> Adoptado</span>
+              }
               @if (solicitud.estado === 'ACEPTADA' && solicitud.id_chat) {
                 <button type="button" class="chat-button" (click)="abrirChat(solicitud)">
                   <i class="bi bi-chat-dots"></i> Abrir chat

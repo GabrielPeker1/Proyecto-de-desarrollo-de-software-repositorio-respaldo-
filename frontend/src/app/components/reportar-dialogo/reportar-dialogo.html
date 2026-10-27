@@ -1,0 +1,27 @@
+<div class="reporte-overlay" (click)="cerrar()">
+  <form class="reporte-modal" (click)="$event.stopPropagation()" (ngSubmit)="enviar()"
+        role="dialog" aria-labelledby="reporte-titulo">
+    <h2 id="reporte-titulo">{{ titulo || 'Reportar a ' + nombre }}</h2>
+    <label for="categoria-reporte">Motivo del reporte</label>
+    <select id="categoria-reporte" name="categoria" [(ngModel)]="categoria" required>
+      <option value="" disabled>Elegí una opción</option>
+      @for (opcion of categorias; track opcion.valor) {
+        <option [value]="opcion.valor">{{ opcion.texto }}</option>
+      }
+    </select>
+    <label for="motivo-reporte">¿Qué pasó?</label>
+    <textarea id="motivo-reporte" name="motivo" rows="4" maxlength="1000" required
+              [(ngModel)]="motivo"
+              placeholder="Contá qué pasó. Un moderador va a revisar el reporte."></textarea>
+    <p class="reporte-aviso">
+      {{ aviso }}
+      Los reportes sin motivo suman un strike. Con 3 strikes no vas a poder reportar más.
+    </p>
+    <div class="reporte-acciones">
+      <button type="button" class="btn-cancelar" (click)="cerrar()" [disabled]="enviando">Cancelar</button>
+      <button type="submit" class="btn-enviar" [disabled]="!categoria || !motivo.trim() || enviando">
+        {{ enviando ? 'Enviando...' : 'Enviar reporte' }}
+      </button>
+    </div>
+  </form>
+</div>

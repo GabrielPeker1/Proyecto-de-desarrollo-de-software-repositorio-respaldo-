@@ -59,3 +59,18 @@
 .profile-address { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .address-privacy { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; color: #89837d; font-size: 11px; }
 @media (max-width: 560px) { .profile-address { grid-template-columns: 1fr 1fr; } .profile-address > .profile-field:first-child { grid-column: 1 / -1; } }
+
+.blocked-block > p { margin: 0; color: var(--text-gray); font-size: 12px; }
+.blocked-block ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.blocked-block li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+}
+.blocked-block li span { display: grid; gap: 2px; min-width: 0; }
+.blocked-block li strong { font-size: 13px; }
+.blocked-block li small { color: var(--text-gray); font-size: 11px; }
+.blocked-block li button {
+  flex-shrink: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px;
+  background: #fff; color: var(--text-dark); font-size: 12px; font-weight: 600;
+}
+.blocked-block li button:disabled { cursor: not-allowed; opacity: .55; }

@@ -6,6 +6,8 @@ Los nombres de tablas y columnas son los del diagrama Entidad-Relación.
 """
 
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +173,14 @@ class Usuarios(models.Model):
     # el usuario la cambia desde Mi Perfil.
     direccion_publica = models.BooleanField(default=False)
     estado = models.CharField(max_length=20, choices=ESTADOS, default=ACTIVO)
+    # Suspension temporal que pone un moderador al aceptar un reporte.
+    # Mientras la fecha no pase, el usuario no puede iniciar sesion ni usar la API.
+    suspendido_hasta = models.DateTimeField(blank=True, null=True)
+    # Strikes por reportar sin motivo. Con MAX_STRIKES_REPORTE se le bloquea
+    # la herramienta de reportes.
+    strikes_reporte = models.PositiveSmallIntegerField(default=0)
+
+    MAX_STRIKES_REPORTE = 3
 
     class Meta:
         db_table = 'usuarios'
@@ -178,6 +188,12 @@ class Usuarios(models.Model):
 
     def __str__(self):
         return self.nombre_completo + ' (' + self.email + ')'
+
+    def esta_suspendido(self):
+        return self.suspendido_hasta is not None and self.suspendido_hasta > timezone.now()
+
+    def puede_reportar(self):
+        return self.strikes_reporte < self.MAX_STRIKES_REPORTE
 
 
 # ---------------------------------------------------------------------------
@@ -431,9 +447,62 @@ class Reportes(models.Model):
         blank=True,
         null=True
     )
+    # Lo que decidio el moderador. ACEPTADO = advertencia o suspension al reportado,
+    # RECHAZADO = se ignoro o se le dio un strike al que reporto.
+    IGNORADO = 'IGNORADO'
+    ADVERTENCIA = 'ADVERTENCIA'
+    SUSPENSION = 'SUSPENSION'
+    STRIKE = 'STRIKE'
+    RESOLUCIONES = [
+        (IGNORADO, 'Ignorado'),
+        (ADVERTENCIA, 'Advertencia al reportado'),
+        (SUSPENSION, 'Suspensión del reportado'),
+        (STRIKE, 'Strike al reportador'),
+    ]
+
+    # De que se trata el reporte, para que el moderador lo vea de un vistazo.
+    INSULTOS = 'INSULTOS'
+    ACOSO = 'ACOSO'
+    ESTAFA = 'ESTAFA'
+    SPAM = 'SPAM'
+    CONTENIDO_INAPROPIADO = 'CONTENIDO_INAPROPIADO'
+    OTRO = 'OTRO'
+    CATEGORIAS = [
+        (INSULTOS, 'Insultos o lenguaje ofensivo'),
+        (ACOSO, 'Acoso'),
+        (ESTAFA, 'Posible estafa'),
+        (SPAM, 'Spam'),
+        (CONTENIDO_INAPROPIADO, 'Contenido inapropiado'),
+        (OTRO, 'Otro'),
+    ]
+
+    # Cuantos mensajes guardamos como evidencia (los ultimos).
+    LIMITE_EVIDENCIA = 200
+
+    categoria = models.CharField(max_length=30, choices=CATEGORIAS, default=OTRO)
     motivo = models.TextField()
+    # Copia de los mensajes entre los dos usuarios en el momento del reporte.
+    # Es una copia (y no una referencia) para que la prueba no desaparezca si
+    # despues se borran los mensajes. La ve solo el moderador.
+    evidencia = models.JSONField(blank=True, null=True)
+    # Si se reporta una publicacion (y no al usuario en general). SET_NULL para
+    # que el reporte no se borre si despues se elimina la publicacion.
+    publicacion = models.ForeignKey(
+        'Publicaciones',
+        on_delete=models.SET_NULL,
+        db_column='id_publicacion',
+        related_name='reportes',
+        blank=True,
+        null=True
+    )
+    # Copia de la publicacion al momento del reporte (por si despues la editan o la borran).
+    publicacion_reportada = models.JSONField(blank=True, null=True)
     fecha_reporte = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default=PENDIENTE)
+    resolucion = models.CharField(max_length=20, choices=RESOLUCIONES, blank=True, null=True)
+    # Nota interna del moderador (no la ve el usuario).
+    nota_moderador = models.TextField(blank=True, null=True)
+    fecha_resolucion = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'reportes'
@@ -442,6 +511,94 @@ class Reportes(models.Model):
 
     def __str__(self):
         return 'Reporte ' + str(self.id_reporte) + ' - ' + self.estado
+
+    def armar_copia_publicacion(self):
+        publicacion = self.publicacion
+        if publicacion is None:
+            return None
+        animal = publicacion.animal
+        return {
+            'id_publicacion': publicacion.id_publicacion,
+            'descripcion': publicacion.descripcion,
+            'estado': publicacion.estado,
+            'localidad': publicacion.localidad,
+            'provincia': publicacion.provincia,
+            'fecha_publicacion': publicacion.fecha_publicacion.isoformat(),
+            'animal': {
+                'nombre': animal.nombre,
+                'especie': animal.especie,
+                'raza': animal.raza,
+                'edad': animal.edad,
+                'sexo': animal.sexo,
+            },
+            'fotos': [foto.url_foto for foto in animal.fotos.all()],
+        }
+
+    def armar_evidencia(self):
+        """Los mensajes de todos los chats entre el que reporta y el reportado,
+        del mas viejo al mas nuevo. Un chat siempre es adoptante <-> rescatista,
+        asi que puede estar cualquiera de los dos de cada lado."""
+        a, b = self.usuario_reportador_id, self.usuario_reportado_id
+        mensajes = Mensajes.objects.filter(
+            Q(chat__solicitud__adoptante_id=a, chat__solicitud__publicacion__rescatista_id=b) |
+            Q(chat__solicitud__adoptante_id=b, chat__solicitud__publicacion__rescatista_id=a)
+        ).select_related('emisor', 'chat__solicitud__publicacion__animal').order_by('-fecha_envio')
+        ultimos = list(mensajes[:self.LIMITE_EVIDENCIA])
+        ultimos.reverse()
+        return [{
+            'id_mensaje': m.id_mensaje,
+            'id_chat': m.chat_id,
+            'animal': m.chat.solicitud.publicacion.animal.nombre,
+            'emisor_id': m.emisor_id,
+            'emisor': m.emisor.nombre_completo,
+            'contenido': m.contenido,
+            'fecha_envio': m.fecha_envio.isoformat(),
+        } for m in ultimos]
+
+
+# ---------------------------------------------------------------------------
+# tabla alertas
+# Avisos que un moderador le manda a un usuario: advertencias de comportamiento,
+# suspensiones y strikes. El usuario las ve al entrar y las marca como leidas.
+# ---------------------------------------------------------------------------
+class Alertas(models.Model):
+    ADVERTENCIA = 'ADVERTENCIA'
+    SUSPENSION = 'SUSPENSION'
+    STRIKE = 'STRIKE'
+    TIPOS = [
+        (ADVERTENCIA, 'Advertencia de comportamiento'),
+        (SUSPENSION, 'Suspensión'),
+        (STRIKE, 'Strike por reporte sin motivo'),
+    ]
+
+    id_alerta = models.AutoField(primary_key=True)
+    usuario = models.ForeignKey(
+        Usuarios,
+        on_delete=models.CASCADE,
+        db_column='id_usuario',
+        related_name='alertas'
+    )
+    # El reporte que la origino. SET_NULL para no perder la alerta si se borra el reporte.
+    reporte = models.ForeignKey(
+        Reportes,
+        on_delete=models.SET_NULL,
+        db_column='id_reporte',
+        related_name='alertas',
+        blank=True,
+        null=True
+    )
+    tipo = models.CharField(max_length=20, choices=TIPOS)
+    mensaje = models.TextField()
+    fecha_alerta = models.DateTimeField(auto_now_add=True)
+    leida = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'alertas'
+        verbose_name_plural = 'Alertas'
+        ordering = ['-fecha_alerta']
+
+    def __str__(self):
+        return 'Alerta ' + str(self.id_alerta) + ' - ' + self.tipo
 
 
 # ---------------------------------------------------------------------------

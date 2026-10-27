@@ -4,6 +4,8 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from './services/auth';
 import { NavigationEnd, Router } from '@angular/router';
 import { SolicitudService } from './services/solicitud';
+import { Alerta, AlertaService } from './services/alerta';
+import { UsuarioService } from './services/usuario';
 import { filter } from 'rxjs';
 
 @Component({
@@ -15,18 +17,26 @@ import { filter } from 'rxjs';
 })
 export class App implements OnInit {
   solicitudesPendientes = 0;
+  // Avisos del moderador que el usuario todavía no vio. Se muestran de a uno.
+  alertas: Alerta[] = [];
 
   constructor(
     private auth: AuthService,
     private router: Router,
-    private solicitudes: SolicitudService
+    private solicitudes: SolicitudService,
+    private alertaService: AlertaService,
+    private usuarios: UsuarioService
   ) {}
 
   ngOnInit(): void {
     this.cargarSolicitudesPendientes();
+    this.cargarAlertas();
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
-    ).subscribe(() => this.cargarSolicitudesPendientes());
+    ).subscribe(() => {
+      this.cargarSolicitudesPendientes();
+      this.cargarAlertas();
+    });
     this.solicitudes.actualizaciones$.subscribe(() => this.cargarSolicitudesPendientes());
   }
 
@@ -43,6 +53,54 @@ export class App implements OnInit {
       console.error('No se pudo leer la foto de perfil del usuario.', error);
       return '';
     }
+  }
+
+  get esModerador(): boolean {
+    return this.auth.esModerador();
+  }
+
+  get alertaActual(): Alerta | null {
+    return this.alertas[0] ?? null;
+  }
+
+  get tituloAlerta(): string {
+    switch (this.alertaActual?.tipo) {
+      case 'SUSPENSION': return 'Tu cuenta fue suspendida';
+      case 'STRIKE': return 'Recibiste un strike';
+      default: return 'Advertencia de un moderador';
+    }
+  }
+
+  private cargarAlertas(): void {
+    const usuario = this.usuario;
+    if (!usuario?.id_usuario || this.esModerador) {
+      this.alertas = [];
+      return;
+    }
+    this.alertaService.getNoLeidas().subscribe({
+      next: response => {
+        this.alertas = Array.isArray(response?.data) ? response.data : [];
+        // Un strike puede bloquearle los reportes: refrescamos sus datos guardados.
+        if (this.alertas.some(alerta => alerta.tipo === 'STRIKE')) {
+          this.usuarios.get(usuario.id_usuario).subscribe({
+            next: res => res?.data && this.auth.actualizarUsuarioActual(res.data),
+            error: error => console.error('No se pudieron actualizar los datos del usuario.', error)
+          });
+        }
+      },
+      error: error => console.error('No se pudieron cargar las alertas.', error)
+    });
+  }
+
+  cerrarAlerta(): void {
+    const alerta = this.alertaActual;
+    if (!alerta) {
+      return;
+    }
+    this.alertas = this.alertas.slice(1);
+    this.alertaService.marcarLeida(alerta.id_alerta).subscribe({
+      error: error => console.error('No se pudo marcar la alerta como leída.', error)
+    });
   }
 
   get esRescatista(): boolean {

@@ -15,6 +15,7 @@ from .models import (
     Chats,
     Mensajes,
     Reportes,
+    Alertas,
     Bloqueos,
 )
 
@@ -29,6 +30,7 @@ admin.site.register(SolicitudesAdopcion)
 admin.site.register(Chats)
 admin.site.register(Mensajes)
 admin.site.register(Reportes)
+admin.site.register(Alertas)
 admin.site.register(Bloqueos)
 
 # Titulos del panel para que quede prolijo

@@ -45,6 +45,14 @@ export class PublicacionService {
     return this.http.patch<any>(`${this.baseUrl}/${id}/`, data);
   }
 
+  /**
+   * Solo el rescatista dueño. Pasos permitidos (los controla el back):
+   * EN_ADOPCION -> EN_PROCESO -> ADOPTADO, y EN_PROCESO -> EN_ADOPCION.
+   */
+  cambiarEstado(id: number, estado: 'EN_ADOPCION' | 'EN_PROCESO' | 'ADOPTADO'): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/${id}/estado/`, { estado });
+  }
+
   delete(id: number, idRescatista: number): Observable<any> {
     const params = new HttpParams().set('id_rescatista', idRescatista);
     return this.http.delete<any>(`${this.baseUrl}/${id}/`, { params });

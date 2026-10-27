@@ -6,11 +6,12 @@ import { PublicacionService } from '../../services/publicacion';
 import { SolicitudService } from '../../services/solicitud';
 import { AuthService } from '../../services/auth';
 import { ToastrService } from 'ngx-toastr';
+import { ReportarDialogo } from '../reportar-dialogo/reportar-dialogo';
 
 @Component({
   selector: 'app-publicacion-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ReportarDialogo],
   templateUrl: './publicacion-detail.html',
   styleUrls: ['./publicacion-detail.css']
 })
@@ -21,8 +22,10 @@ export class PublicacionDetail implements OnInit {
   cargandoSolicitud = false;
   enviandoSolicitud = false;
   eliminandoPublicacion = false;
+  cambiandoEstado = false;
   solicitudExistente = false;
   estadoSolicitud = '';
+  reportando = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -99,6 +102,21 @@ export class PublicacionDetail implements OnInit {
       && usuario?.id_usuario === this.publicacion?.rescatista?.id_usuario;
   }
 
+  /** Cualquiera logueado puede reportar una publicación, menos su dueño. */
+  get puedeReportar(): boolean {
+    const usuario = this.auth.getUsuarioActual();
+    return !!usuario?.id_usuario && usuario.id_usuario !== this.publicacion?.rescatista?.id_usuario;
+  }
+
+  abrirReporte(): void {
+    // Con 3 strikes por reportar sin motivo, el back bloquea los reportes.
+    if (this.auth.getUsuarioActual()?.puede_reportar === false) {
+      this.toastr.warning('Tu herramienta de reportes está bloqueada por reportes sin motivo.');
+      return;
+    }
+    this.reportando = true;
+  }
+
   get sinSesion(): boolean {
     return !this.auth.getUsuarioActual()?.id_usuario;
   }
@@ -140,6 +158,38 @@ export class PublicacionDetail implements OnInit {
         console.error('No se pudo enviar la solicitud de adopción.', e);
         this.toastr.error(e.error?.data || 'No se pudo enviar la solicitud.');
         this.enviandoSolicitud = false;
+        this.changeDetector.detectChanges();
+      }
+    });
+  }
+
+  cambiarEstado(estado: 'EN_ADOPCION' | 'EN_PROCESO' | 'ADOPTADO'): void {
+    if (!this.esRescatistaPropietario || !this.publicacion || this.cambiandoEstado) {
+      return;
+    }
+    const nombre = this.publicacion.animal?.nombre || 'la mascota';
+    if (estado === 'ADOPTADO' && !window.confirm(
+      `¿Se concretó la adopción de ${nombre}? La publicación va a quedar como adoptada y no se puede volver atrás. `
+      + 'Las solicitudes que sigan pendientes se van a rechazar.')) {
+      return;
+    }
+    this.cambiandoEstado = true;
+    this.publicacionService.cambiarEstado(this.publicacion.id_publicacion, estado).subscribe({
+      next: res => {
+        this.publicacion.estado = res?.data?.estado ?? estado;
+        this.cambiandoEstado = false;
+        const mensajes = {
+          EN_PROCESO: 'La publicación quedó en proceso de adopción.',
+          ADOPTADO: `¡Listo! ${nombre} quedó como adoptado.`,
+          EN_ADOPCION: 'La publicación volvió a estar en adopción.',
+        };
+        this.toastr.success(mensajes[estado]);
+        this.changeDetector.detectChanges();
+      },
+      error: error => {
+        console.error('No se pudo cambiar el estado de la publicación.', error);
+        this.toastr.error(error?.error?.data || 'No se pudo cambiar el estado.');
+        this.cambiandoEstado = false;
         this.changeDetector.detectChanges();
       }
     });

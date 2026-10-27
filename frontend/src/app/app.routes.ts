@@ -9,6 +9,7 @@ import { ChatList } from './components/chat-list/chat-list';
 import { ChatDetail } from './components/chat-detail/chat-detail';
 import { Perfil } from './components/perfil/perfil';
 import { PerfilPublicoComponent } from './components/perfil-publico/perfil-publico';
+import { Moderacion } from './components/moderacion/moderacion';
 import { authenticatedOnlyGuard, rescuerOnlyGuard } from './guards/role.guard';
 
 export const routes: Routes = [
@@ -23,5 +24,9 @@ export const routes: Routes = [
   { path: 'chats/:id', component: ChatDetail, canActivate: [authenticatedOnlyGuard] },
   { path: 'perfil', component: Perfil, canActivate: [authenticatedOnlyGuard] },
   { path: 'usuarios/:id', component: PerfilPublicoComponent, canActivate: [authenticatedOnlyGuard] },
+  // Panel del moderador. Sin guard: si no hay un moderador logueado, la pantalla
+  // muestra su propio login (el back igual rechaza todo lo que no sea de un moderador).
+  { path: 'moderacion', component: Moderacion },
+  { path: 'administracion', redirectTo: 'moderacion' },
   { path: '**', redirectTo: 'publicaciones' }
 ];

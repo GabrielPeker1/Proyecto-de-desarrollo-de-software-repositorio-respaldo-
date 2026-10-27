@@ -29,7 +29,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       const esLogin = req.url.startsWith('/api/login/');
       if (error.status === 401 && esApi && !esLogin && auth.estaLogueado()) {
         auth.logout();
-        toastr.warning('Tu sesión venció. Iniciá sesión de nuevo.');
+        // El back explica el motivo (sesión vencida, cuenta suspendida, dada de baja...).
+        const motivo = error.error?.detail ?? error.error?.data;
+        toastr.warning(typeof motivo === 'string' ? motivo : 'Tu sesión venció. Iniciá sesión de nuevo.');
         router.navigate(['/login'], { queryParams: { returnUrl: router.url } });
       }
       return throwError(() => error);

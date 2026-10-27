@@ -9,6 +9,10 @@ export const authenticatedOnlyGuard: CanActivateFn = (_route, state) => {
   if (!auth.getUsuarioActual()?.id_usuario) {
     return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }
+  // El moderador no usa la app de adopciones: solo tiene el panel.
+  if (auth.esModerador()) {
+    return router.createUrlTree(['/moderacion']);
+  }
   return true;
 };
 

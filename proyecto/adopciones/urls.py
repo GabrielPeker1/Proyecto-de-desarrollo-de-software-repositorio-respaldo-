@@ -26,6 +26,7 @@ from .views import (
     FotosAnimalView,
     SubirFotosAnimalView,
     PublicacionesView,
+    EstadoPublicacionView,
     DepartamentosPublicacionesView,
     LocalidadesPublicacionesView,
     SolicitudesAdopcionView,
@@ -35,6 +36,9 @@ from .views import (
     MensajesView,
     ReportesView,
     GestionarReporteView,
+    GestionarSancionView,
+    AlertasView,
+    MarcarAlertaLeidaView,
     BloqueosView,
 )
 
@@ -58,6 +62,7 @@ urlpatterns = [
     path('api/usuarios/<int:id>/baja/', DarDeBajaUsuarioView.as_view()),
     path('api/usuarios/<int:id>/perfil-publico/', PerfilPublicoView.as_view()),
     path('api/usuarios/<int:id>/cambiar-password/', CambiarPasswordView.as_view()),
+    path('api/usuarios/<int:id>/sancion/<str:accion>/', GestionarSancionView.as_view()),
     path('api/login/', LoginView.as_view()),
 
     # Animales y sus fotos
@@ -72,6 +77,7 @@ urlpatterns = [
     path('api/publicaciones/departamentos/', DepartamentosPublicacionesView.as_view()),
     path('api/publicaciones/localidades/', LocalidadesPublicacionesView.as_view()),
     path('api/publicaciones/<int:id>/', PublicacionesView.as_view()),
+    path('api/publicaciones/<int:id>/estado/', EstadoPublicacionView.as_view()),
 
     # Solicitudes de adopcion
     path('api/solicitudes/', SolicitudesAdopcionView.as_view()),
@@ -85,10 +91,15 @@ urlpatterns = [
     path('api/mensajes/', MensajesView.as_view()),
     path('api/mensajes/<int:id>/', MensajesView.as_view()),
 
-    # Reportes. La ultima recibe la acción (revisar/aceptar/rechazar) en la URL.
+    # Reportes. La ultima recibe la acción del moderador en la URL
+    # (revisar/ignorar/advertir/suspender/strike).
     path('api/reportes/', ReportesView.as_view()),
     path('api/reportes/<int:id>/', ReportesView.as_view()),
     path('api/reportes/<int:id>/<str:accion>/', GestionarReporteView.as_view()),
+
+    # Alertas que le manda el moderador al usuario
+    path('api/alertas/', AlertasView.as_view()),
+    path('api/alertas/<int:id>/leida/', MarcarAlertaLeidaView.as_view()),
 
     # Bloqueos
     path('api/bloqueos/', BloqueosView.as_view()),

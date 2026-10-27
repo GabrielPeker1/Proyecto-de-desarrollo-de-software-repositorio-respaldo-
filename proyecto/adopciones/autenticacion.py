@@ -12,6 +12,7 @@ rechaza, asi que no se puede falsificar. Vence a los 7 dias.
 """
 
 from django.core import signing
+from django.utils import timezone
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -19,6 +20,11 @@ from .models import Usuarios
 
 SALT = 'adopciones.token'
 DURACION_SEGUNDOS = 7 * 24 * 60 * 60
+
+
+def mensaje_suspension(usuario):
+    hasta = timezone.localtime(usuario.suspendido_hasta).strftime('%d/%m/%Y %H:%M')
+    return 'Tu cuenta está suspendida hasta el ' + hasta + '.'
 
 
 def generar_token(usuario):
@@ -50,6 +56,8 @@ class TokenAutenticacion(BaseAuthentication):
             raise AuthenticationFailed('El usuario ya no existe')
         if usuario.estado == Usuarios.BAJA:
             raise AuthenticationFailed('El usuario está dado de baja')
+        if usuario.esta_suspendido():
+            raise AuthenticationFailed(mensaje_suspension(usuario))
         return (usuario, header[1].decode())
 
     def authenticate_header(self, request):

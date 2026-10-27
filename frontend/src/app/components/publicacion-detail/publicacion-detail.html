@@ -43,6 +43,11 @@
 
     <div class="detail-info">
       <h1>{{ publicacion.animal.nombre }}</h1>
+      @if (publicacion.estado === 'EN_PROCESO') {
+        <span class="estado-publicacion en-proceso"><i class="bi bi-hourglass-split"></i> En proceso de adopción</span>
+      } @else if (publicacion.estado === 'ADOPTADO') {
+        <span class="estado-publicacion adoptado"><i class="bi bi-heart-fill"></i> Adoptado</span>
+      }
       <p class="description">{{ publicacion.descripcion }}</p>
 
       <div class="ficha-tecnica">
@@ -108,6 +113,8 @@
           <button class="btn-orange" type="button" disabled>
             Ya tenés una solicitud {{ estadoSolicitud === 'PENDIENTE' ? 'pendiente' : estadoSolicitud.toLocaleLowerCase() }}
           </button>
+        } @else if (publicacion.estado === 'ADOPTADO') {
+          <button class="btn-orange" type="button" disabled>Esta mascota ya fue adoptada</button>
         } @else {
           <button class="btn-orange" type="button" [disabled]="enviandoSolicitud" (click)="solicitarAdopcion()">
             @if (enviandoSolicitud) { Enviando solicitud... } @else { Solicitar adopción }
@@ -119,6 +126,31 @@
         </a>
       }
       @if (esRescatistaPropietario) {
+        <div class="estado-panel">
+          <span class="estado-panel-titulo">Estado de la publicación</span>
+          @switch (publicacion.estado) {
+            @case ('EN_ADOPCION') {
+              <p>En adopción. Cuando aceptes una solicitud y empiecen a coordinar, ponela en proceso.</p>
+              <button type="button" class="btn-estado" [disabled]="cambiandoEstado" (click)="cambiarEstado('EN_PROCESO')">
+                <i class="bi bi-hourglass-split"></i> Poner en proceso
+              </button>
+            }
+            @case ('EN_PROCESO') {
+              <p>En proceso de adopción. Ya no aparece en el catálogo.</p>
+              <div class="estado-acciones">
+                <button type="button" class="btn-estado btn-adoptado" [disabled]="cambiandoEstado" (click)="cambiarEstado('ADOPTADO')">
+                  <i class="bi bi-heart-fill"></i> Marcar como adoptado
+                </button>
+                <button type="button" class="btn-estado btn-secundario" [disabled]="cambiandoEstado" (click)="cambiarEstado('EN_ADOPCION')">
+                  Volver a en adopción
+                </button>
+              </div>
+            }
+            @case ('ADOPTADO') {
+              <p><i class="bi bi-heart-fill"></i> ¡Adoptado! La publicación queda guardada pero ya no aparece en el catálogo.</p>
+            }
+          }
+        </div>
         <button class="delete-publication-button" type="button" [disabled]="eliminandoPublicacion"
                 (click)="eliminarPublicacion()">
           @if (eliminandoPublicacion) {
@@ -135,6 +167,19 @@
            title="Ver perfil del rescatista">{{ publicacion.rescatista.nombre_completo }}</a>
         · {{ publicacion.localidad || 'Sin localidad' }}@if (publicacion.provincia) {, {{ publicacion.provincia }}}
       </p>
+
+      @if (puedeReportar) {
+        <button type="button" class="btn-reportar-publicacion" (click)="abrirReporte()">
+          <i class="bi bi-flag"></i> Reportar publicación
+        </button>
+      }
+      @if (reportando) {
+        <app-reportar-dialogo [idUsuario]="publicacion.rescatista.id_usuario"
+                              [idPublicacion]="publicacion.id_publicacion"
+                              [titulo]="'Reportar la publicación de ' + (publicacion.animal?.nombre || 'esta mascota')"
+                              aviso="El moderador va a ver la publicación tal como está ahora."
+                              (cerrado)="reportando = false"></app-reportar-dialogo>
+      }
     </div>
   </div>
 }

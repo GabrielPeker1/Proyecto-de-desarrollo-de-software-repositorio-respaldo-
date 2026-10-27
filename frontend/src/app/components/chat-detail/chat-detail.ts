@@ -7,10 +7,12 @@ import { interval, Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat';
 import { MensajeService } from '../../services/mensaje';
 import { AuthService } from '../../services/auth';
+import { Bloqueo, BloqueoService } from '../../services/bloqueo';
+import { ReportarDialogo } from '../reportar-dialogo/reportar-dialogo';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ReportarDialogo],
   selector: 'app-chat-detail',
   templateUrl: './chat-detail.html',
   styleUrl: './chat-detail.css',
@@ -24,6 +26,12 @@ export class ChatDetail implements OnInit, OnDestroy {
   cargando = true;
   enviando = false;
   errorCarga = false;
+  reportando = false;
+  // Bloqueo con el otro usuario
+  bloqueoHecho: Bloqueo | null = null;
+  meBloquearon = false;
+  // Arranca en true: el botón no se puede usar hasta saber si ya está bloqueado.
+  procesandoBloqueo = true;
   private polling?: Subscription;
   private idChat = 0;
 
@@ -32,6 +40,7 @@ export class ChatDetail implements OnInit, OnDestroy {
     private chatService: ChatService,
     private mensajeService: MensajeService,
     public auth: AuthService,
+    private bloqueos: BloqueoService,
     private toastr: ToastrService,
     private changeDetector: ChangeDetectorRef
   ) {}
@@ -49,6 +58,7 @@ export class ChatDetail implements OnInit, OnDestroy {
       next: response => {
         this.chat = response?.data;
         this.changeDetector.detectChanges();
+        this.cargarBloqueos();
         this.cargarMensajes();
         this.polling = interval(5000).subscribe(() => this.cargarMensajes(false));
       },
@@ -76,6 +86,72 @@ export class ChatDetail implements OnInit, OnDestroy {
   get soyAdoptante(): boolean {
     return String(this.chat?.participantes?.adoptante?.id_usuario)
       === String(this.auth.getUsuarioActual()?.id_usuario);
+  }
+
+  private get idOtroUsuario(): number | undefined {
+    return this.persona?.id_usuario;
+  }
+
+  private cargarBloqueos(): void {
+    this.bloqueos.getMios().subscribe({
+      next: res => {
+        const lista: Bloqueo[] = Array.isArray(res?.data) ? res.data : [];
+        const yo = this.auth.getUsuarioActual()?.id_usuario;
+        const otro = this.idOtroUsuario;
+        this.bloqueoHecho = yo && otro ? BloqueoService.buscarHecho(lista, yo, otro) : null;
+        this.meBloquearon = !!yo && !!otro && BloqueoService.meBloqueo(lista, yo, otro);
+        this.procesandoBloqueo = false;
+        this.changeDetector.detectChanges();
+      },
+      error: error => {
+        console.error('No se pudieron cargar los bloqueos.', error);
+        this.procesandoBloqueo = false;
+        this.changeDetector.detectChanges();
+      }
+    });
+  }
+
+  alternarBloqueo(nombre: string): void {
+    const otro = this.idOtroUsuario;
+    if (!otro || this.procesandoBloqueo) {
+      return;
+    }
+    const bloqueo = this.bloqueoHecho;
+    if (!bloqueo && !window.confirm(
+      `¿Querés bloquear a ${nombre}? No van a poder mandarse mensajes ni solicitudes, `
+      + 'y no vas a ver sus publicaciones. Podés desbloquearlo cuando quieras.')) {
+      return;
+    }
+    this.procesandoBloqueo = true;
+    const pedido = bloqueo ? this.bloqueos.desbloquear(bloqueo.id_bloqueo) : this.bloqueos.bloquear(otro);
+    pedido.subscribe({
+      next: res => {
+        this.bloqueoHecho = bloqueo ? null : res?.data ?? null;
+        this.toastr.success(bloqueo ? `Desbloqueaste a ${nombre}.` : `Bloqueaste a ${nombre}.`);
+        this.procesandoBloqueo = false;
+        this.changeDetector.detectChanges();
+      },
+      error: error => {
+        console.error('No se pudo cambiar el bloqueo.', error);
+        const data = error?.error?.data;
+        this.toastr.error(typeof data === 'string' ? data : 'No se pudo completar la acción.');
+        // Puede que el estado de la pantalla no coincida con el real (ej: ya estaba bloqueado).
+        this.cargarBloqueos();
+      }
+    });
+  }
+
+  /** Con 3 strikes por reportar sin motivo, el back bloquea los reportes. */
+  get reportesBloqueados(): boolean {
+    return this.auth.getUsuarioActual()?.puede_reportar === false;
+  }
+
+  abrirReporte(): void {
+    if (this.reportesBloqueados) {
+      this.toastr.warning('Tu herramienta de reportes está bloqueada por reportes sin motivo.');
+      return;
+    }
+    this.reportando = true;
   }
 
   cargarMensajes(showSpinner = true): void {
