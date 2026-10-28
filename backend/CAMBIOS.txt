@@ -29,10 +29,16 @@ LOS CAMBIOS".
 4) En la app: volver a iniciar sesión (el login ahora usa token, las
    sesiones viejas no sirven).
 
-5) No hay cuentas de Moderador y desde el registro no se pueden crear.
-   Para tener una, correr (pide la contraseña por teclado):
+5) La migración 0019 crea sola tres cuentas de prueba (clave 123456):
 
-       python manage.py crear_moderador --email mod@adoptme.com --nombre "Moderador"
+       adoptante1@mail.com   (Adoptante)
+       rescatista1@mail.com  (Rescatista)
+       mod1@adoptme.com      (Moderador)
+
+   Desde el registro no se pueden crear moderadores. Para crear otro,
+   correr (pide la contraseña por teclado):
+
+       python manage.py crear_moderador --email mod2@adoptme.com --nombre "Moderador 2"
 
    y entrar por http://localhost:4200/moderacion (o /administracion).
    Ver la sección 8.
