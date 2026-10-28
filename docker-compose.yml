@@ -1,0 +1,58 @@
+# Levanta todo el proyecto (MySQL + Django + Angular) con:
+#
+#     docker compose up --build
+#
+# y se entra por http://localhost:4200
+# Los datos de MySQL quedan en el volumen db_data (no se borran al apagar).
+# Para empezar con la base vacia: docker compose down -v
+
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: adopcionesdb
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # 127.0.0.1 (y no localhost) para que pruebe por red: al inicializarse la
+      # primera vez MySQL levanta un servidor temporal que solo atiende por socket.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    restart: on-failure
+    environment:
+      DB_HOST: db
+      DB_PASSWORD: root
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    volumes:
+      # El codigo se monta para que runserver recargue al editar.
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py loaddata datos_iniciales &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4200:4200"
+    volumes:
+      # Solo src: node_modules queda el que se instalo dentro de la imagen.
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    depends_on:
+      - backend
+    # --poll porque en Windows los cambios de archivos no le llegan al contenedor.
+    command: npx ng serve --host 0.0.0.0 --poll 2000 --proxy-config src/proxy.docker.json
+
+volumes:
+  db_data:

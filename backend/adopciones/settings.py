@@ -3,6 +3,7 @@ Configuracion del proyecto.
 Definimos que apps usa el proyecto y a que base de datos se conecta.
 """
 
+import os
 from pathlib import Path
 
 # Ruta base del proyecto (la carpeta donde esta manage.py)
@@ -82,8 +83,9 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'adopcionesdb',      # nombre del schema 
         'USER': 'root',
-        'PASSWORD': '', #poner la clave acá
-        'HOST': 'localhost',
+        # Con Docker vienen de docker-compose.yml. Sin Docker se usa lo de la derecha.
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''), #poner la clave acá
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': '3306',
     }
 }

@@ -1,5 +1,29 @@
 ## Como levantar el proyecto
 
+Se puede levantar con docker a través de docker
+
+crear la imagen por primera vez con
+```bash
+docker compose build
+```
+luego levantar la imagen con
+
+```bash
+docker compose up -d
+```
+
+ver los puertos con
+
+```bash
+docker compose ps
+```
+
+levantar
+
+FRONT: http://localhost:4200
+BACK: http://localhost:8000
+
+O através de la consola con
 ### Backend
 
 Para levantar el backend hacer estos pasos
@@ -71,7 +95,7 @@ Ya tendremos el backend corriendo en http://127.0.0.1:8000/
 
 Si es la primera vez que se levanta el frontend ejecutar todos los pasos si no el 1 y 2
 
-1)Abrir un terminal y ejecutar
+1) Abrir un terminal y ejecutar
 
     ```bash
     CD frontend
@@ -143,6 +167,6 @@ Ambos pueden reportar usuarios, publicaciones y bloquear usuarios
 
     Ya existen 3 usuarios genericos
 
-    * Adoptante adoptante1@mail.com clave 123456
-    * rescatist1@mail.com clave 123456
-    * mod1@adoptme.com clave 123456
+    * Adoptante: adoptante1@mail.com clave 123456
+    * Rescatista: rescatist1@mail.com clave 123456
+    * Moderador: mod1@adoptme.com clave 123456

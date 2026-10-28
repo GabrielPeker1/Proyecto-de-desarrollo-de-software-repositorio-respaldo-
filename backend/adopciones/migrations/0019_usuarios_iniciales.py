@@ -44,10 +44,11 @@ def crear_usuarios(apps, schema_editor):
                 provincia='-', ciudad='-', direccion_completa='-', zona_aproximada='-'
             )
         else:
+            # Campana esta en el catalogo (data/georef_argentina.json).
             ubicacion = Ubicaciones.objects.create(
-                provincia='Santa Fe', departamento='Rosario', ciudad='Rosario',
+                provincia='Buenos Aires', departamento='Campana', ciudad='Campana',
                 calle='Cordoba', numero='1000',
-                direccion_completa='Cordoba 1000', zona_aproximada='Rosario'
+                direccion_completa='Cordoba 1000', zona_aproximada='Campana'
             )
 
         Usuarios.objects.create(
