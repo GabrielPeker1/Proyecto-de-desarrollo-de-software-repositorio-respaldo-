@@ -151,7 +151,12 @@ Ambos pueden reportar usuarios, publicaciones y bloquear usuarios
     Este usuario no se puede registrar se crea a través de ejecutar el siguiente comando
 
     ```bash
-     python manage.py crear_moderador --email mod@adoptme.com --nombre
+     python manage.py crear_moderador --email (unemail) --nombre (unnombre)
+    ```
+    Si esta corriendo con Docker
+
+    ```bash
+    docker compose exec backend python manage.py crear_moderador --email (unemail) --nombre (unnombre)
     ```
 
     el moderador entra con su usuario y contraseña a
