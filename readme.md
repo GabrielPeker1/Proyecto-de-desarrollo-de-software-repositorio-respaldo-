@@ -140,3 +140,9 @@ Ambos pueden reportar usuarios, publicaciones y bloquear usuarios
     * Advertir al usuario reportado
     * Bloquear al usuario reportado
     * Sancionar al que reporto, esto ocurre si el usuario reporta desmedidamente y genera 3 strikes a la tercera se le bloquea las herramientas de reporte por un tiempo asignado por el mod.
+
+    Ya existen 3 usuarios genericos
+
+    * Adoptante adoptante1@mail.com clave 123456
+    * rescatist1@mail.com clave 123456
+    * mod1@adoptme.com clave 123456

@@ -6,11 +6,11 @@ corre "python manage.py migrate", sin registrarse a mano:
     rescatista1@mail.com  / 123456   (Rescatista)
     mod1@adoptme.com      / 123456   (Moderador)
 
-Si alguna de esas cuentas ya existe la deja como esta.
+Si alguna de esas cuentas ya existe la deja como esta
 """
 
 from django.contrib.auth.hashers import make_password
-from django.db import migrations
+from django.db import migrations 
 
 PASSWORD = '123456'
 
