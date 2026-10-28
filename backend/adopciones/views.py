@@ -339,6 +339,11 @@ class UsuariosView(APIView):
         if ubicacion_id and Usuarios.objects.filter(ubicacion_id=ubicacion_id).exists():
             return Response({'status': 'error', 'data': 'Esa ubicación ya pertenece a otro usuario'},
                             status=status.HTTP_400_BAD_REQUEST)
+        # Avisamos claro si el mail ya esta registrado (409 = conflicto).
+        email = str(request.data.get('email') or '').strip()
+        if email and Usuarios.objects.filter(email__iexact=email).exists():
+            return Response({'status': 'error', 'data': 'Ya existe una cuenta con el email ' + email},
+                            status=status.HTTP_409_CONFLICT)
         serializer = UsuariosSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -387,12 +392,15 @@ class LoginView(APIView):
 
         # .filter().first() devuelve el usuario o None si no existe.
         # Usamos esto en vez de .get() porque .get() tira excepción si no encuentra nada.
-        usuario = Usuarios.objects.filter(email=email).first()
+        usuario = Usuarios.objects.filter(email__iexact=email).first()
+        if usuario is None:
+            return Response({'status': 'error', 'data': 'No existe una cuenta con el email ' + email},
+                            status=status.HTTP_404_NOT_FOUND)
 
         # check_password compara la contraseña escrita contra el hash guardado.
         # No desencripta nada: vuelve a hashear lo que escribió el usuario y compara.
-        if usuario is None or not check_password(password, usuario.password_encriptada):
-            return Response({'status': 'error', 'data': 'Email o contraseña incorrectos'},
+        if not check_password(password, usuario.password_encriptada):
+            return Response({'status': 'error', 'data': 'Contraseña incorrecta'},
                             status=status.HTTP_401_UNAUTHORIZED)
 
         if usuario.estado == Usuarios.BAJA:
@@ -1278,7 +1286,9 @@ class ReportesView(APIView):
         if str(datos.get('usuario_reportado_id')) == str(request.user.id_usuario):
             return Response({'status': 'error', 'data': 'No podés reportarte a vos mismo'},
                             status=status.HTTP_400_BAD_REQUEST)
-        # Con 3 strikes por reportar sin motivo se le bloquea la herramienta.
+        # Con 3 strikes por reportar sin motivo se le bloquea la herramienta
+        # (por el tiempo que eligio el moderador, o para siempre).
+        request.user.vencer_bloqueo_reportes()
         if not request.user.puede_reportar():
             return Response({'status': 'error',
                              'data': 'Tu herramienta de reportes está bloqueada por reportes sin motivo'},
@@ -1342,8 +1352,10 @@ class GestionarReporteView(APIView):
                    Body: { "mensaje": "..." }
       suspender -> ACEPTADO, suspende al reportado X dias (0 = baja definitiva)
                    Body: { "dias": 7, "mensaje": "..." (opcional) }
-      strike    -> RECHAZADO, le suma un strike al que reporto sin motivo.
-                   Con 3 strikes no puede reportar mas.
+      strike    -> RECHAZADO, le suma un strike al que reporto sin motivo y le
+                   avisa automaticamente. Con el 3er strike se le bloquea la
+                   herramienta de reportes por los dias que elija el moderador.
+                   Body (solo en el 3er strike): { "dias": 30 }  (0 = permanente)
     Todas aceptan "nota" (nota interna del moderador). El moderador es el del token.
     """
 
@@ -1417,16 +1429,42 @@ class GestionarReporteView(APIView):
                                    mensaje=(aviso + ' ' + mensaje).strip())
 
         elif accion == 'strike':
+            # Si ya habia cumplido un bloqueo anterior, este strike cuenta desde 0.
+            reportador.vencer_bloqueo_reportes()
+            if reportador.strikes_reporte >= Usuarios.MAX_STRIKES_REPORTE:
+                return Response({'status': 'error',
+                                 'data': 'Ese usuario ya tiene la herramienta de reportes bloqueada'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            bloquea = reportador.strikes_reporte + 1 >= Usuarios.MAX_STRIKES_REPORTE
+            if bloquea:
+                dias = str(request.data.get('dias', '')).strip()
+                if not dias.isdigit() or int(dias) > self.DIAS_MAXIMOS:
+                    return Response({'status': 'error',
+                                     'data': 'Indicá los días de bloqueo de reportes (0 a 365; 0 = permanente)'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                dias = int(dias)
+                reportador.reportes_bloqueados_hasta = (
+                    timezone.now() + timedelta(days=dias) if dias > 0 else None
+                )
             reportador.strikes_reporte += 1
-            reportador.save(update_fields=['strikes_reporte'])
+            reportador.save(update_fields=['strikes_reporte', 'reportes_bloqueados_hasta'])
             reporte.estado = Reportes.RECHAZADO
             reporte.resolucion = Reportes.STRIKE
+            # El aviso se arma solo: el moderador no tiene que escribir nada.
             texto = ('Un moderador revisó un reporte tuyo y consideró que no tenía motivo. '
                      'Strike ' + str(reportador.strikes_reporte) + ' de ' + str(Usuarios.MAX_STRIKES_REPORTE) + '.')
-            if not reportador.puede_reportar():
-                texto += ' Tu herramienta de reportes quedó bloqueada.'
-            Alertas.objects.create(usuario=reportador, reporte=reporte, tipo=Alertas.STRIKE,
-                                   mensaje=(texto + ' ' + mensaje).strip())
+            if bloquea and dias == 0:
+                texto += ' Tu herramienta de reportes quedó bloqueada de forma permanente.'
+            elif bloquea:
+                hasta = timezone.localtime(reportador.reportes_bloqueados_hasta).strftime('%d/%m/%Y %H:%M')
+                texto += (' Tu herramienta de reportes quedó bloqueada por ' + str(dias)
+                          + (' día' if dias == 1 else ' días') + ' (hasta el ' + hasta + ').')
+            else:
+                faltan = Usuarios.MAX_STRIKES_REPORTE - reportador.strikes_reporte
+                texto += (' Si llegás a ' + str(Usuarios.MAX_STRIKES_REPORTE) + ' strikes se te bloquea la '
+                          'herramienta de reportes (te ' + ('queda ' if faltan == 1 else 'quedan ')
+                          + str(faltan) + ').')
+            Alertas.objects.create(usuario=reportador, reporte=reporte, tipo=Alertas.STRIKE, mensaje=texto)
 
         reporte.nota_moderador = str(request.data.get('nota') or '').strip() or None
         reporte.fecha_resolucion = timezone.now()
@@ -1452,7 +1490,8 @@ class GestionarSancionView(APIView):
             usuario.save(update_fields=['suspendido_hasta', 'estado'])
         elif accion == 'reiniciar-strikes':
             usuario.strikes_reporte = 0
-            usuario.save(update_fields=['strikes_reporte'])
+            usuario.reportes_bloqueados_hasta = None
+            usuario.save(update_fields=['strikes_reporte', 'reportes_bloqueados_hasta'])
         else:
             return Response({'status': 'error', 'data': 'Acción inválida'},
                             status=status.HTTP_400_BAD_REQUEST)

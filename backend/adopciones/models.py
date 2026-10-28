@@ -179,6 +179,9 @@ class Usuarios(models.Model):
     # Strikes por reportar sin motivo. Con MAX_STRIKES_REPORTE se le bloquea
     # la herramienta de reportes.
     strikes_reporte = models.PositiveSmallIntegerField(default=0)
+    # Hasta cuando dura el bloqueo de reportes (lo elige el moderador al dar el
+    # ultimo strike). Si llego a MAX_STRIKES_REPORTE y esto es null, es permanente.
+    reportes_bloqueados_hasta = models.DateTimeField(blank=True, null=True)
 
     MAX_STRIKES_REPORTE = 3
 
@@ -193,7 +196,17 @@ class Usuarios(models.Model):
         return self.suspendido_hasta is not None and self.suspendido_hasta > timezone.now()
 
     def puede_reportar(self):
-        return self.strikes_reporte < self.MAX_STRIKES_REPORTE
+        if self.strikes_reporte < self.MAX_STRIKES_REPORTE:
+            return True
+        return self.reportes_bloqueados_hasta is not None and self.reportes_bloqueados_hasta <= timezone.now()
+
+    def vencer_bloqueo_reportes(self):
+        """Si ya cumplio el bloqueo de reportes, arranca de nuevo con 0 strikes."""
+        if (self.strikes_reporte >= self.MAX_STRIKES_REPORTE and self.reportes_bloqueados_hasta is not None
+                and self.reportes_bloqueados_hasta <= timezone.now()):
+            self.strikes_reporte = 0
+            self.reportes_bloqueados_hasta = None
+            self.save(update_fields=['strikes_reporte', 'reportes_bloqueados_hasta'])
 
 
 # ---------------------------------------------------------------------------

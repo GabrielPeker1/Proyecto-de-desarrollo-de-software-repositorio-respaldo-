@@ -5,6 +5,7 @@ import { ToastrService } from 'ngx-toastr';
 import { AuthService } from '../../services/auth';
 import { AccionReporte, ReporteService, textoCategoria } from '../../services/reporte';
 import { UsuarioService } from '../../services/usuario';
+import { PublicacionService } from '../../services/publicacion';
 
 type Pestana = 'pendientes' | 'resueltos' | 'sancionados';
 type AccionResolucion = Exclude<AccionReporte, 'revisar'>;
@@ -47,12 +48,14 @@ export class Moderacion implements OnInit {
 
   // Reportes con la conversación desplegada
   evidenciaAbierta = new Set<number>();
+  eliminandoPublicaciones = new Set<number>();
   readonly textoCategoria = textoCategoria;
 
   constructor(
     private auth: AuthService,
     private reporteService: ReporteService,
     private usuarioService: UsuarioService,
+    private publicacionService: PublicacionService,
     private toastr: ToastrService,
     private changeDetector: ChangeDetectorRef
   ) {}
@@ -163,7 +166,8 @@ export class Moderacion implements OnInit {
     this.enviando = true;
     this.reporteService.gestionar(reporte.id_reporte, this.accion, {
       mensaje: this.mensaje.trim() || undefined,
-      dias: this.accion === 'suspender' ? Number(this.dias) : undefined,
+      // En el strike el backend solo usa los días si es el que bloquea los reportes.
+      dias: this.accion === 'suspender' || this.accion === 'strike' ? Number(this.dias) : undefined,
       nota: this.nota.trim() || undefined
     }).subscribe({
       next: () => {
@@ -190,6 +194,39 @@ export class Moderacion implements OnInit {
       error: err => {
         const mensaje = err?.error?.data;
         this.toastr.error(typeof mensaje === 'string' ? mensaje : 'No se pudo quitar la sanción.');
+      }
+    });
+  }
+
+  eliminarPublicacion(reporte: any): void {
+    const id = reporte.id_publicacion;
+    const usuario = this.auth.getUsuarioActual();
+    if (!id || !usuario?.id_usuario || this.eliminandoPublicaciones.has(id)) {
+      return;
+    }
+    if (!window.confirm(`¿Eliminar la publicación de ${reporte.publicacion?.animal?.nombre || 'esta mascota'}? No se puede deshacer.`)) {
+      return;
+    }
+    this.eliminandoPublicaciones.add(id);
+    // El backend deja borrar a un moderador aunque no sea el dueño (lo saca del token).
+    this.publicacionService.delete(id, usuario.id_usuario).subscribe({
+      next: () => {
+        this.toastr.success('Publicación eliminada.');
+        this.eliminandoPublicaciones.delete(id);
+        // Otros reportes pueden apuntar a la misma publicación.
+        for (const r of this.reportes) {
+          if (r.id_publicacion === id) {
+            r.publicacion_existe = false;
+            r.id_publicacion = null;
+          }
+        }
+        this.changeDetector.detectChanges();
+      },
+      error: err => {
+        const mensaje = err?.error?.data;
+        this.toastr.error(typeof mensaje === 'string' ? mensaje : 'No se pudo eliminar la publicación.');
+        this.eliminandoPublicaciones.delete(id);
+        this.changeDetector.detectChanges();
       }
     });
   }

@@ -64,7 +64,11 @@
               @if (usuario.strikes_reporte > 0) {
                 <span class="chip" [class.chip-rojo]="usuario.strikes_reporte >= maxStrikes">
                   {{ usuario.strikes_reporte }}/{{ maxStrikes }} strikes
-                  @if (usuario.strikes_reporte >= maxStrikes) { · reportes bloqueados }
+                  @if (usuario.strikes_reporte >= maxStrikes) {
+                    · reportes bloqueados
+                    @if (usuario.reportes_bloqueados_hasta) { hasta {{ usuario.reportes_bloqueados_hasta | date:'dd/MM/yyyy HH:mm' }} }
+                    @else { para siempre }
+                  }
                 </span>
               }
             </div>
@@ -148,6 +152,15 @@
               </span>
               <p>{{ pub.descripcion || 'Sin descripción.' }}</p>
               <span class="detalle">Así estaba la publicación cuando se reportó.</span>
+              @if (reporte.publicacion_existe) {
+                <div class="acciones">
+                  <button type="button" class="btn btn-peligro" [disabled]="eliminandoPublicaciones.has(reporte.id_publicacion)"
+                          (click)="eliminarPublicacion(reporte)">
+                    <i class="bi bi-trash"></i>
+                    {{ eliminandoPublicaciones.has(reporte.id_publicacion) ? 'Eliminando...' : 'Eliminar publicación' }}
+                  </button>
+                </div>
+              }
             </div>
           }
 
@@ -201,9 +214,11 @@
               <button type="button" class="btn btn-peligro" (click)="abrirResolucion(reporte, 'suspender')">
                 <i class="bi bi-slash-circle"></i> Suspender
               </button>
-              <button type="button" class="btn" (click)="abrirResolucion(reporte, 'strike')">
-                <i class="bi bi-flag"></i> Strike al que reportó
-              </button>
+              @if (reporte.usuario_reportador.strikes_reporte < maxStrikes) {
+                <button type="button" class="btn" (click)="abrirResolucion(reporte, 'strike')">
+                  <i class="bi bi-flag"></i> Strike al que reportó
+                </button>
+              }
             </div>
           } @else {
             <form class="resolucion" (ngSubmit)="confirmar(reporte)">
@@ -239,11 +254,18 @@
                     @if (reporte.usuario_reportador.strikes_reporte + 1 >= maxStrikes) {
                       <strong>Se le va a bloquear la herramienta de reportes.</strong>
                     }
+                    Le llega un aviso automático.
                   </p>
-                  <label>
-                    <span>Mensaje para el usuario (opcional)</span>
-                    <textarea name="mensaje" rows="2" [(ngModel)]="mensaje"></textarea>
-                  </label>
+                  @if (reporte.usuario_reportador.strikes_reporte + 1 >= maxStrikes) {
+                    <label>
+                      <span>Duración del bloqueo de reportes</span>
+                      <select name="dias" [(ngModel)]="dias">
+                        @for (opcion of opcionesDias; track opcion) {
+                          <option [ngValue]="opcion">{{ opcion === 0 ? 'Permanente' : textoDias(opcion) }}</option>
+                        }
+                      </select>
+                    </label>
+                  }
                 }
               }
               <label>

@@ -283,11 +283,11 @@ class UsuariosSerializer(serializers.ModelSerializer):
         model = Usuarios
         fields = ('id_usuario', 'email', 'nombre_completo', 'telefono', 'descripcion',
                   'direccion_publica', 'estado', 'suspendido_hasta', 'strikes_reporte',
-                  'puede_reportar', 'ubicacion', 'tipo_usuario',
+                  'reportes_bloqueados_hasta', 'puede_reportar', 'ubicacion', 'tipo_usuario',
                   'ubicacion_id', 'tipo_usuario_id', 'provincia', 'departamento', 'ciudad',
                   'zona_aproximada', 'calle', 'numero', 'piso', 'password')
         # El estado (ACTIVO/BAJA), la suspension y los strikes solo los cambia un moderador.
-        read_only_fields = ('estado', 'suspendido_hasta', 'strikes_reporte')
+        read_only_fields = ('estado', 'suspendido_hasta', 'strikes_reporte', 'reportes_bloqueados_hasta')
 
     def validate(self, attrs):
         # Calle, numero y piso: si cambia alguno desde el perfil, se valida y se rearma
@@ -595,7 +595,11 @@ class ReportesSerializer(serializers.ModelSerializer):
         # El moderador ve los antecedentes de los dos para decidir.
         # Al usuario comun no le mandamos la nota interna ni datos del otro.
         if self.context.get('moderador'):
-            data['usuario_reportador']['strikes_reporte'] = obj.usuario_reportador.strikes_reporte
+            reportador = obj.usuario_reportador
+            # Si ya cumplio un bloqueo de reportes, sus strikes vuelven a contar desde 0.
+            bloqueo_vencido = (reportador.strikes_reporte >= Usuarios.MAX_STRIKES_REPORTE
+                               and reportador.puede_reportar())
+            data['usuario_reportador']['strikes_reporte'] = 0 if bloqueo_vencido else reportador.strikes_reporte
             reportado = obj.usuario_reportado
             data['usuario_reportado']['suspendido_hasta'] = (
                 reportado.suspendido_hasta if reportado.esta_suspendido() else None
@@ -610,6 +614,8 @@ class ReportesSerializer(serializers.ModelSerializer):
             data['publicacion'] = obj.publicacion_reportada
             # Si se borro despues del reporte, el moderador solo ve la copia.
             data['publicacion_existe'] = obj.publicacion_id is not None
+            # Para que el moderador pueda borrarla desde el panel.
+            data['id_publicacion'] = obj.publicacion_id
         else:
             data.pop('nota_moderador')
         return data

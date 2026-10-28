@@ -146,6 +146,7 @@ export class Registro implements OnInit {
         console.error('No se pudo guardar la ubicación del usuario.', error);
         this.error = this.errorMessage(error);
         this.registrando = false;
+        this.changeDetector.detectChanges();
       }
     });
   }
@@ -183,15 +184,22 @@ export class Registro implements OnInit {
       },
       error: error => {
         console.error('No se pudo crear la cuenta.', error);
+        if (error?.status === 409) {
+          this.toastr.warning(this.errorMessage(error), 'El usuario ya existe');
+        } else {
+          this.toastr.error(this.errorMessage(error));
+        }
         this.ubicaciones.delete(locationId).subscribe({
           next: () => {
             this.error = this.errorMessage(error);
             this.registrando = false;
+            this.changeDetector.detectChanges();
           },
           error: cleanupError => {
             console.error('No se pudo quitar la ubicación creada tras fallar el registro.', cleanupError);
             this.error = `${this.errorMessage(error)} La ubicación quedó guardada; contactá al equipo si necesitás limpiarla.`;
             this.registrando = false;
+            this.changeDetector.detectChanges();
           }
         });
       }

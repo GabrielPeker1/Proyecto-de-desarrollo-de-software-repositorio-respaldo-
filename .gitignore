@@ -1,3 +1,4 @@
 frontend/.angular/
 frontend/node_modules/
-backend/adopciones/__pycache__/
+__pycache__/
+*.pyc
